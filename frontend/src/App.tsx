@@ -50,6 +50,9 @@ function App() {
   const [message, setMessage] = useState('')
   const [jobFilter, setJobFilter] = useState('전체')
   const [backupStatus, setBackupStatus] = useState('백업 JSON 파일을 선택하면 복원 결과가 여기에 표시됩니다.')
+  const [siteRevision, setSiteRevision] = useState(0)
+  const [snapshots, setSnapshots] = useState<{ id: number; createdAt: string }[]>([])
+  const [storageBusy, setStorageBusy] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
   const keywords = keywordsBySite[site]
   const siteJobs = jobs.filter((j) => j.site === site)
@@ -57,8 +60,20 @@ function App() {
   const waiting = siteJobs.filter((j) => j.status === '대기').length
   const filteredKeywords = keywords.filter((item) => item.toLowerCase().includes(search.trim().toLowerCase()))
 
-  useEffect(() => { localStorage.setItem(KEYWORD_KEY, JSON.stringify(keywordsBySite)) }, [keywordsBySite])
-  useEffect(() => { localStorage.setItem(JOB_KEY, JSON.stringify(jobs)) }, [jobs])
+  const lastKeywords = useRef(JSON.stringify(keywordsBySite))
+  const lastJobs = useRef(JSON.stringify(jobs))
+  useEffect(() => {
+    const serialized = JSON.stringify(keywordsBySite)
+    if (serialized === lastKeywords.current) return
+    try { localStorage.setItem(KEYWORD_KEY, serialized); lastKeywords.current = serialized }
+    catch { queueMicrotask(() => setMessage('브라우저 저장 실패 · JSON 백업 또는 서버 보관을 실행하세요.')) }
+  }, [keywordsBySite])
+  useEffect(() => {
+    const serialized = JSON.stringify(jobs)
+    if (serialized === lastJobs.current) return
+    try { localStorage.setItem(JOB_KEY, serialized); lastJobs.current = serialized }
+    catch { queueMicrotask(() => setMessage('작업 기록 저장 실패 · JSON 백업 또는 서버 보관을 실행하세요.')) }
+  }, [jobs])
 
   function changeSite(next: Site) {
     setSite(next); setKeyword(''); setSearch(''); setSelected([]); setMessage(''); setJobFilter('전체')
@@ -124,8 +139,36 @@ function App() {
     setMessage('취소한 작업을 다시 대기열에 등록했습니다. 자동 실행되지는 않습니다.')
   }
 
+  function fullBackup() {
+    const sites = JSON.parse(localStorage.getItem('zero-seo-os-sites-v1') || '{"A-1":{"name":"","url":""},"A-2":{"name":"","url":""}}')
+    return { format: 'zero-seo-os-backup', version: 2, exportedAt: new Date().toISOString(), keywordsBySite, jobs, sites }
+  }
+
+  async function serverStorage(action: 'save' | 'list' | 'read', id?: number) {
+    if (storageBusy) return
+    setStorageBusy(true)
+    try {
+      const payload = action === 'save' ? { action, data: fullBackup() } : action === 'read' ? { action, id } : { action }
+      const response = await fetch('http://127.0.0.1:8765/api/storage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), credentials: 'omit', cache: 'no-store', signal: AbortSignal.timeout(18000) })
+      const result = await response.json()
+      if (!response.ok) throw new Error('서버 보관 요청 실패 · 서버 실행 및 데이터 형식을 확인하세요.')
+      if (action === 'save') {
+        if (result.saved !== true || !Number.isSafeInteger(result.id)) throw new Error('저장 결과 미확인')
+        setBackupStatus(`서버 저장 확인 · 저장본 #${result.id}. 이전 저장본은 유지됩니다.`)
+      } else if (action === 'list') {
+        if (!Array.isArray(result.snapshots) || !result.snapshots.every((r: {id: unknown; createdAt: unknown}) => r && Number.isSafeInteger(r.id) && typeof r.createdAt === 'string')) throw new Error('저장본 목록 형식 오류')
+        setSnapshots(result.snapshots)
+        setBackupStatus(`서버 저장본 ${result.snapshots.length}개 조회 완료`)
+      } else {
+        await importBackup(new File([JSON.stringify(result.data)], 'server-snapshot.json', { type: 'application/json' }))
+      }
+    } catch (error) { setBackupStatus(error instanceof Error ? error.message : '서버 보관 실패') }
+    finally { setStorageBusy(false) }
+  }
+
   function exportBackup() {
-    const data = { format: 'zero-seo-os-backup', version: 1, exportedAt: new Date().toISOString(), keywordsBySite, jobs }
+    let data
+    try { data = fullBackup() } catch { setBackupStatus('사이트 설정 읽기 실패 · 기존 브라우저 데이터를 보존합니다.'); return }
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
     const link = document.createElement('a')
     link.href = url
@@ -143,7 +186,7 @@ function App() {
       const data: unknown = JSON.parse(await file.text())
       if (!data || typeof data !== 'object') throw new Error('백업 형식이 올바르지 않습니다.')
       const backup = data as Record<string, unknown>
-      if (backup.format !== 'zero-seo-os-backup' || backup.version !== 1) throw new Error('ZERO SEO OS v1 백업 파일만 복원할 수 있습니다.')
+      if (backup.format !== 'zero-seo-os-backup' || ![1, 2].includes(backup.version as number)) throw new Error('ZERO SEO OS v1/v2 백업 파일만 복원할 수 있습니다.')
       const rawKeywords = backup.keywordsBySite
       if (!rawKeywords || typeof rawKeywords !== 'object') throw new Error('키워드 데이터가 없습니다.')
       const keywordData = rawKeywords as Record<string, unknown>
@@ -153,16 +196,31 @@ function App() {
       const isJob = (value: unknown): value is Job => {
         if (!value || typeof value !== 'object') return false
         const j = value as Record<string, unknown>
-        return typeof j.id === 'string' && (j.site === 'A-1' || j.site === 'A-2') && typeof j.keyword === 'string' && typeof j.createdAt === 'string' && ALL_STATUSES.includes(j.status as JobStatus)
+        return Object.keys(j).sort().join(',') === 'createdAt,id,keyword,site,status' && typeof j.id === 'string' && (j.site === 'A-1' || j.site === 'A-2') && typeof j.keyword === 'string' && typeof j.createdAt === 'string' && ALL_STATUSES.includes(j.status as JobStatus)
       }
       if (!backup.jobs.every(isJob)) throw new Error('작업 기록에 잘못된 항목이 있습니다.')
       const ids = backup.jobs.map((j: Job) => j.id)
       if (new Set(ids).size !== ids.length) throw new Error('작업 ID가 중복되어 있습니다.')
+      let sitesJson: string | null = null
+      if (backup.version === 2) {
+        const sites = backup.sites as Record<string, unknown>
+        if (!sites || typeof sites !== 'object' || Object.keys(sites).sort().join(',') !== 'A-1,A-2') throw new Error('사이트 설정 형식 오류')
+        for (const id of ['A-1', 'A-2']) {
+          const reg = sites[id] as Record<string, unknown>
+          if (!reg || Object.keys(reg).sort().join(',') !== 'name,url' || typeof reg.name !== 'string' || typeof reg.url !== 'string') throw new Error('사이트 이름·주소만 복원할 수 있습니다.')
+          if (reg.url) {
+            const u = new URL(reg.url)
+            if (u.protocol !== 'https:' || u.username || u.password || u.search || u.hash || (u.port && u.port !== '443')) throw new Error('사이트 HTTPS 주소 오류')
+          }
+        }
+        sitesJson = JSON.stringify(sites)
+      }
       setBackupStatus(`파일 검사 완료: A-1 ${keywordData['A-1'].length}개 / A-2 ${keywordData['A-2'].length}개 / 작업 ${backup.jobs.length}개`)
-      if (!window.confirm('현재 A-1/A-2 키워드와 작업 기록을 백업 파일 내용으로 모두 교체합니다. 계속하시겠습니까?')) {
+      if (!window.confirm('현재 A-1/A-2 키워드·작업 및 v2 사이트 설정을 교체합니다. 기존 데이터를 먼저 백업했는지 확인하세요. 계속하시겠습니까?')) {
         setBackupStatus('복원을 취소했습니다. 현재 데이터는 변경되지 않았습니다.')
         return
       }
+      if (sitesJson !== null) { localStorage.setItem('zero-seo-os-sites-v1', sitesJson); setSiteRevision(v => v + 1) }
       setKeywordsBySite({ 'A-1': [...keywordData['A-1']], 'A-2': [...keywordData['A-2']] })
       setJobs(backup.jobs)
       setSelected([])
@@ -193,7 +251,7 @@ function App() {
           <button>◷ 작업 기록</button>
           <button>⚙ 설정</button>
         </nav>
-        <div className="sidebar-bottom">ZERO SEO OS · v0.2.2</div>
+        <div className="sidebar-bottom">ZERO SEO OS · v0.2.3</div>
       </aside>
       <main className="main">
         <header className="topbar">
@@ -214,7 +272,7 @@ function App() {
           <span className="demo-tag">로컬 개발 버전</span>
         </section>
         {message && <p className="global-message" role="status">{message}</p>}
-        <WordPressSites key={site} site={site} />
+        <WordPressSites key={`${site}-${siteRevision}`} site={site} />
         <section className="stats">
           <article className="stat-card"><span>등록된 키워드</span><strong>{keywords.length}</strong><small>현재 사이트 기준</small></article>
           <article className="stat-card"><span>AI 콘텐츠 생성</span><strong>0</strong><small>AI 연동 전</small></article>
@@ -285,14 +343,17 @@ function App() {
             </div>}
         </section>
         <section className="panel bottom-panel">
-          <div className="panel-heading"><div><h2>로컬 데이터 백업</h2><p>A-1/A-2 키워드와 작업 기록을 파일로 보관합니다.</p></div><span className="tag">BACKUP</span></div>
+          <div className="panel-heading"><div><h2>로컬 데이터 백업</h2><p>사이트 이름·주소, 키워드와 작업 기록을 파일 또는 로컬 서버에 보관합니다.</p></div><span className="tag">BACKUP</span></div>
           <div className="backup-actions">
+            <button disabled={storageBusy} onClick={() => void serverStorage('save')}>현재 전체 데이터 서버 보관</button>
+            <button disabled={storageBusy} onClick={() => void serverStorage('list')}>서버 저장본 조회</button>
             <button type="button" onClick={exportBackup}>전체 데이터 백업 다운로드</button>
             <label className="backup-file-label" htmlFor="zero-backup-file">복원할 JSON 파일 선택</label>
             <input id="zero-backup-file" ref={importRef} type="file" accept=".json,application/json" aria-label="ZERO SEO OS 백업 JSON 파일" onChange={(e) => { void importBackup(e.target.files?.[0]) }} />
           </div>
+          {snapshots.map(snapshot => <button key={snapshot.id} disabled={storageBusy} onClick={() => void serverStorage('read', snapshot.id)}>저장본 #{snapshot.id} 복원 · {new Date(snapshot.createdAt).toLocaleString()}</button>)}
           <p className="backup-result" role="status" aria-live="polite">{backupStatus}</p>
-          <p className="queue-note">복원하면 현재 브라우저의 두 사이트 데이터가 모두 교체됩니다. 중요한 데이터는 먼저 백업하세요. JSON 백업 파일에는 키워드가 평문으로 저장됩니다.</p>
+          <p className="queue-note">복원하면 현재 브라우저의 두 사이트 데이터가 모두 교체됩니다. 중요한 데이터는 먼저 백업하세요. v1은 키워드·작업, v2는 사이트 설정도 복원합니다. 저장본은 평문이며 인증정보를 포함하지 않습니다. 서버 보관은 버튼을 눌러야 실행됩니다.</p>
         </section>
       </main>
     </div>

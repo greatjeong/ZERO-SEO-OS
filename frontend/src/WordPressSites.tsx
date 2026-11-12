@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 
 type SiteId = 'A-1' | 'A-2'
 type Registration = { name: string; url: string }
@@ -39,7 +39,6 @@ export default function WordPressSites({ site }: { site: SiteId }) {
   const [draftId, setDraftId] = useState<number | null>(null)
   const [confirmDraft, setConfirmDraft] = useState(false)
   const [busy, setBusy] = useState(false)
-  useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(registrations)) }, [registrations])
   const saved = registrations[site]
   const dirty = name !== saved.name || url !== saved.url
 
@@ -53,7 +52,9 @@ export default function WordPressSites({ site }: { site: SiteId }) {
     try {
       if (!name.trim()) throw new Error('사이트 이름을 입력하세요.')
       const normalized = normalizeUrl(url)
-      setRegistrations(prev => ({ ...prev, [site]: { name: name.trim(), url: normalized } }))
+      const next = { ...registrations, [site]: { name: name.trim(), url: normalized } }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+      setRegistrations(next)
       setName(name.trim()); setUrl(normalized)
       setStatus('등록 완료 · 미검증. 서버 환경설정 후 연결을 확인하세요.')
       setPermissionStatus('글 작성·발행 권한 미확인')
@@ -77,7 +78,7 @@ export default function WordPressSites({ site }: { site: SiteId }) {
       const data: unknown = await response.json()
       if (!data || typeof data !== 'object') throw new Error('서버 응답 형식 오류')
       const result = data as Record<string, unknown>
-      if (!response.ok || result.verified !== true || result.site !== site || result.url !== saved.url || typeof result.checkedAt !== 'string') {
+      if (!response.ok || result.verified !== true || result.site !== site || result.url !== saved.url || (typeof result.checkedAt !== 'string' || !Number.isFinite(Date.parse(result.checkedAt)))) {
         throw new Error(typeof result.message === 'string' ? result.message : '인증 연결을 확인하지 못했습니다.')
       }
       setStatus(`인증 연결 검증 성공 · ${new Date(result.checkedAt).toLocaleString()} (확인 시점 기준)`)
@@ -113,7 +114,7 @@ export default function WordPressSites({ site }: { site: SiteId }) {
       const data: unknown = await response.json()
       if (!data || typeof data !== 'object') throw new Error('서버 응답 형식 오류')
       const result = data as Record<string, unknown>
-      if (!response.ok || result.draftConfirmed !== true || result.site !== site || result.url !== saved.url || result.status !== 'draft' || typeof result.postId !== 'number' || !Number.isSafeInteger(result.postId) || result.postId <= 0 || typeof result.checkedAt !== 'string') {
+      if (!response.ok || result.draftConfirmed !== true || result.site !== site || result.url !== saved.url || result.status !== 'draft' || typeof result.postId !== 'number' || !Number.isSafeInteger(result.postId) || result.postId <= 0 || (typeof result.checkedAt !== 'string' || !Number.isFinite(Date.parse(result.checkedAt)))) {
         throw new Error(typeof result.message === 'string' ? result.message : '초안 저장 결과를 확인하지 못했습니다.')
       }
       setDraftId(result.postId)
@@ -126,7 +127,7 @@ export default function WordPressSites({ site }: { site: SiteId }) {
   }
 
   return <section className="panel wp-panel">
-    <div className="panel-heading"><div><h2>{site} 워드프레스 사이트</h2><p>사이트 등록 후 서버를 통해 실제 인증을 검증합니다.</p></div><span className="tag">v0.2.2</span></div>
+    <div className="panel-heading"><div><h2>{site} 워드프레스 사이트</h2><p>사이트 등록 후 서버를 통해 실제 인증을 검증합니다.</p></div><span className="tag">v0.2.3</span></div>
     <div className="wp-fields">
       <label>사이트 이름<input maxLength={100} value={name} disabled={busy} onChange={e => { setName(e.target.value); resetChecks() }} /></label>
       <label>워드프레스 주소<input type="url" placeholder="https://example.com" value={url} disabled={busy} onChange={e => { setUrl(e.target.value); resetChecks() }} /></label>
@@ -151,7 +152,7 @@ export default function WordPressSites({ site }: { site: SiteId }) {
       {draftId && <a href={`${saved.url}/wp-admin/post.php?post=${draftId}&action=edit`} target="_blank" rel="noopener noreferrer">워드프레스에서 초안 확인</a>}
       <p className="queue-note">먼저 글 작성·발행 권한을 확인하세요. 테스트 글은 초안으로만 요청하며, 서버 기록이 유지되는 동안 같은 사이트에 중복 생성하지 않습니다. 기존 키워드·작업 대기열과 별도로 진행합니다.</p>
     </div>
-    <p className="queue-note">브라우저에는 이름과 주소만 저장합니다. 앱 비밀번호는 Python 서버 환경변수로 설정하세요. 새로고침하면 다시 검증해야 합니다. 기존 JSON 백업은 키워드·작업 전용이며 사이트 설정은 포함하지 않습니다.</p>
+    <p className="queue-note">브라우저에는 이름과 주소만 저장합니다. 앱 비밀번호는 Python 서버 환경변수로 설정하세요. 새로고침하면 다시 검증해야 합니다. v2 전체 백업과 서버 보관에는 사이트 이름·주소도 포함됩니다.</p>
   </section>
 }
 

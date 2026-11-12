@@ -30,7 +30,7 @@ def normalize_url(raw):
         p = urlsplit(raw.strip())
         if (p.scheme != 'https' or not p.hostname or p.username is not None
                 or p.password is not None or p.query or p.fragment or p.port not in (None, 443)
-                or '\\' in raw or any(ord(c) < 33 for c in raw)):
+                or '%' in p.netloc or '\\' in raw or any(ord(c) < 33 for c in raw)):
             raise ValueError()
         host = p.hostname.encode('idna').decode('ascii')
         return urlunsplit(('https', host, p.path.rstrip('/'), '', ''))
@@ -226,7 +226,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_OPTIONS(self):
-        if not self.allowed() or self.path not in ('/api/sites/verify', '/api/sites/permissions', '/api/sites/test-draft'):
+        if not self.allowed() or self.path not in ('/api/sites/verify', '/api/sites/permissions', '/api/sites/test-draft', '/api/storage'):
             self.reply(403, {'verified': False})
             return
         self.send_response(204)
@@ -240,15 +240,21 @@ class Handler(BaseHTTPRequestHandler):
         if not self.allowed():
             self.reply(403, {'verified': False, 'message': '허용되지 않은 요청입니다.'})
             return
-        if self.path not in ('/api/sites/verify', '/api/sites/permissions', '/api/sites/test-draft'):
+        if self.path not in ('/api/sites/verify', '/api/sites/permissions', '/api/sites/test-draft', '/api/storage'):
             self.reply(404, {'verified': False})
             return
         try:
+            self.connection.settimeout(15)
+            if self.headers.get('Transfer-Encoding'):
+                raise VerificationError('청크 요청은 허용하지 않습니다.')
             size = int(self.headers.get('Content-Length', '0'))
-            if not 0 < size <= 4096 or self.headers.get('Content-Type') != 'application/json':
+            if not 0 < size <= (5 * 1024 * 1024 if self.path == '/api/storage' else 4096) or self.headers.get('Content-Type') != 'application/json':
                 raise VerificationError('JSON 요청 크기 또는 형식이 올바르지 않습니다.')
             payload = json.loads(self.rfile.read(size))
-            if self.path == '/api/sites/test-draft':
+            if self.path == '/api/storage':
+                from storage import snapshot
+                result = snapshot(payload)
+            elif self.path == '/api/sites/test-draft':
                 result = test_draft(payload)
             else:
                 result = verify(payload, include_permissions=True) if self.path == '/api/sites/permissions' else verify(payload)
@@ -264,4 +270,10 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     print('ZERO SEO OS connector: http://' + HOST + ' (local only)')
-    ThreadingHTTPServer(('127.0.0.1', 8765), Handler).serve_forever()
+    httpd = ThreadingHTTPServer(('127.0.0.1', 8765), Handler)
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        httpd.server_close()

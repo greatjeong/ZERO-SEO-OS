@@ -29,3 +29,7 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Browser test outputs
+frontend/test-results/
+frontend/playwright-report/
