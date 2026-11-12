@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import './App.css'
+import WordPressSites from './WordPressSites'
 
 type Site = 'A-1' | 'A-2'
 type KeywordData = Record<Site, string[]>
@@ -192,7 +193,7 @@ function App() {
           <button>◷ 작업 기록</button>
           <button>⚙ 설정</button>
         </nav>
-        <div className="sidebar-bottom">ZERO SEO OS · v0.1.4</div>
+        <div className="sidebar-bottom">ZERO SEO OS · v0.2.2</div>
       </aside>
       <main className="main">
         <header className="topbar">
@@ -213,6 +214,7 @@ function App() {
           <span className="demo-tag">로컬 개발 버전</span>
         </section>
         {message && <p className="global-message" role="status">{message}</p>}
+        <WordPressSites key={site} site={site} />
         <section className="stats">
           <article className="stat-card"><span>등록된 키워드</span><strong>{keywords.length}</strong><small>현재 사이트 기준</small></article>
           <article className="stat-card"><span>AI 콘텐츠 생성</span><strong>0</strong><small>AI 연동 전</small></article>
@@ -298,3 +300,6 @@ function App() {
 }
 
 export default App
+
+
+

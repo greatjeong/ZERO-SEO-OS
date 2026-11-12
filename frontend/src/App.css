@@ -382,3 +382,13 @@ h2 { font-size: 19px; margin: 0; }
 .backup-file-label { font-weight:700; color:#3730a3; font-size:13px; }
 .backup-result { margin:16px 0 8px; padding:14px; border-radius:9px; border:1px solid #c7d2fe; background:#eef2ff; color:#312e81; font-size:13px; overflow-wrap:anywhere; }
 
+.wp-panel { margin: 22px 0; padding: 24px; }
+.wp-fields { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; margin: 18px 0; }
+.wp-fields label { display: grid; gap: 8px; font-size: 14px; }
+.wp-fields input { width: 100%; padding: 12px; border: 1px solid #dce1ed; border-radius: 8px; }
+.wp-panel button { border: 1px solid #dce1ed; border-radius: 8px; padding: 10px 18px; background: #eef0ff; color: #3730a3; }
+.wp-panel button:disabled { opacity: .5; cursor: default; }
+.wp-draft-test { margin-top: 20px; padding: 18px; background: #f5f7fc; border: 1px solid #dce1ed; border-radius: 10px; }
+.wp-draft-test p { overflow-wrap: anywhere; }
+.wp-draft-confirm { margin: 14px 0; padding: 16px; border: 2px solid #6366f1; border-radius: 10px; background: white; }
+@media (max-width: 700px) { .wp-fields { grid-template-columns: 1fr; } }
