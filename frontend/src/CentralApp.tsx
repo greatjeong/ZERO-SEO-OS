@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import './central.css'
+import CentralWordPress from './CentralWordPress'
 
 type Slot = 'A-1' | 'A-2'
 type Job = { id: string; site: Slot; keyword: string; status: string; createdAt: string }
@@ -144,7 +145,7 @@ export default function CentralApp() {
       {!data && <section className="panel"><h2>서버 작업 공간이 비어 있습니다</h2><p>기존 데이터가 있으면 아래 JSON 가져오기를 먼저 이용하세요.</p><button disabled={busy} onClick={() => void run(async () => { if (window.confirm('기존 브라우저 데이터는 그대로 두고 빈 서버 작업 공간을 만들까요?')) await persist(emptyData()) })}>빈 작업 공간으로 시작</button></section>}
       {data && <fieldset className="central-fields" disabled={busy}>
         <div className="site-switch">{(['A-1', 'A-2'] as const).map(slot => <button className={site === slot ? 'selected' : ''} key={slot} onClick={() => { setSite(slot); setKeyword('') }}>{slot} 사이트</button>)}</div>
-        <section className="panel"><h2>{site} 사이트 정보</h2><div className="wp-fields"><label>사이트 이름<input value={data.sites[site].name} maxLength={100} onChange={event => changeData({ ...data, sites: { ...data.sites, [site]: { ...data.sites[site], name: event.target.value } } })} /></label><label>워드프레스 주소<input type="url" value={data.sites[site].url} placeholder="https://example.com" onChange={event => changeData({ ...data, sites: { ...data.sites, [site]: { ...data.sites[site], url: event.target.value } } })} /></label></div><p>현재 중앙 버전은 로그인·데이터 저장 단계입니다. WordPress 인증정보 보관과 실행 기능은 아직 연결하지 않았습니다.</p></section>
+        <section className="panel"><h2>{site} 사이트 정보</h2><div className="wp-fields"><label>사이트 이름<input value={data.sites[site].name} maxLength={100} onChange={event => changeData({ ...data, sites: { ...data.sites, [site]: { ...data.sites[site], name: event.target.value } } })} /></label><label>워드프레스 주소<input type="url" value={data.sites[site].url} placeholder="https://example.com" onChange={event => changeData({ ...data, sites: { ...data.sites, [site]: { ...data.sites[site], url: event.target.value } } })} /></label></div><CentralWordPress key={`${site}:${data.sites[site].url}:${workspace.revision}`} slot={site} url={data.sites[site].url} disabled={busy || dirty} api={api} /></section>
         <section className="panel"><h2>키워드 관리</h2><form className="keyword-form" onSubmit={event => { event.preventDefault(); addKeyword() }}><input aria-label="등록할 키워드" value={keyword} onChange={event => setKeyword(event.target.value)} /><button type="submit">키워드 등록</button></form>
           {!keywords.length && <p>등록된 키워드가 없습니다.</p>}{keywords.map(value => <div key={value} className="keyword-item"><strong>{value}</strong><button onClick={() => enqueue(value)}>작업 등록</button><button onClick={() => { if (window.confirm('키워드를 삭제할까요? 기존 작업 기록은 유지됩니다.')) changeData({ ...data, keywordsBySite: { ...data.keywordsBySite, [site]: keywords.filter(v => v !== value) } }) }}>삭제</button></div>)}
         </section>

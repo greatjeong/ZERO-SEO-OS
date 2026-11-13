@@ -1,5 +1,5 @@
 """Private central foundation: login, versioned workspace and backup import.
-No WordPress credentials, no WordPress requests, no automatic local data migration.
+Encrypted WordPress credentials and explicit read-only verification; no automatic migration.
 Run uvicorn central:create_app --factory --app-dir backend after setting config.
 """
 import hashlib
@@ -22,7 +22,7 @@ from central_auth import hash_password, valid_hash, verify_password
 from central_store import Store, postgres_url
 from storage import validate
 
-VERSION = '0.3.1-postgres'
+VERSION = '0.3.2-wp-verification'
 COOKIE = '__Host-zero_session'
 SESSION_SECONDS = 8 * 60 * 60
 MAX_BODY = 5 * 1024 * 1024
@@ -36,6 +36,7 @@ class Settings:
     static_dir: Path = field(default_factory=lambda: Path(__file__).resolve().parent.parent / 'frontend/dist')
 
     database_url: str | None = field(default=None, repr=False)
+    wp_key: str | None = field(default=None, repr=False)
 
     def __post_init__(self):
         p = urlsplit(self.origin)
@@ -62,7 +63,7 @@ class Settings:
             password = os.environ.get('ZERO_OWNER_PASSWORD', '')
             encoded = hash_password(password)
         origin = os.environ.get('ZERO_CENTRAL_ORIGIN') or os.environ.get('RENDER_EXTERNAL_URL', '')
-        return cls(origin.rstrip('/'), Path(directory) if directory else None, encoded, database_url=database)
+        return cls(origin.rstrip('/'), Path(directory) if directory else None, encoded, database_url=database, wp_key=os.environ.get('ZERO_WP_ENCRYPTION_KEY'))
 
 
 async def read_json(request):
@@ -102,6 +103,8 @@ def checked_backup(data, current=None):
 def create_app(settings=None):
     cfg = settings or Settings.from_env()
     store = Store(cfg.data_dir, cfg.database_url)
+    from central_wordpress import WordPressVault
+    vault = WordPressVault(store, cfg.wp_key) if cfg.wp_key else None
     auth_revision = hashlib.sha256(cfg.owner_hash.encode()).hexdigest()
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
@@ -150,7 +153,7 @@ def create_app(settings=None):
 
     @app.get('/api/health')
     def health():
-        return {'version': VERSION, 'mode': 'private-owner', 'database': store.kind, 'wordpressEnabled': False}
+        return {'version': VERSION, 'mode': 'private-owner', 'database': store.kind, 'wordpressEnabled': vault is not None}
 
     @app.post('/api/login')
     async def login(request: Request):
@@ -183,6 +186,22 @@ def create_app(settings=None):
         response = JSONResponse({'loggedOut': True})
         response.delete_cookie(COOKIE, secure=True, httponly=True, samesite='strict', path='/')
         return response
+
+    def require_vault():
+        if vault is None:
+            raise HTTPException(503, '워드프레스 암호화 저장 키가 서버에 설정되지 않았습니다.')
+        return vault
+
+    @app.put('/api/wordpress/{slot}/credentials')
+    async def save_credentials(slot: str, request: Request):
+        session(request, write=True)
+        payload = await read_json(request)
+        return await run_in_threadpool(require_vault().save, slot, payload)
+
+    @app.post('/api/wordpress/{slot}/verify')
+    def verify_wordpress(slot: str, request: Request):
+        session(request, write=True)
+        return require_vault().verify(slot)
 
     @app.get('/api/workspace')
     def workspace(request: Request):
