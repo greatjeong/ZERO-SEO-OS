@@ -7,15 +7,16 @@ import os
 import re
 import secrets
 import socket
-import ssl
 import sqlite3
+import urllib.error
+import urllib.request
 from contextlib import closing
 from pathlib import Path
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit, urlunsplit
 
-CONNECTOR_VERSION = '0.2.4'
+CONNECTOR_VERSION = '0.2.5'
 ORIGIN = 'http://127.0.0.1:5173'
 HOST = '127.0.0.1:8765'
 STATE_DB = Path(__file__).resolve().parent / '.state' / 'test-drafts.sqlite3'
@@ -49,17 +50,27 @@ def public_addresses(hostname):
 
 class PinnedHTTPSConnection(http.client.HTTPSConnection):
     def __init__(self, hostname, address):
-        super().__init__(hostname, timeout=10, context=ssl.create_default_context())
+        # Use the standard HTTPS/TLS implementation, including hostname verification.
+        super().__init__(hostname, timeout=15)
         self.address = address
+        self._create_connection = self.connect_address
 
-    def connect(self):
-        # Connect to the validated address, while checking the original TLS hostname.
-        sock = socket.create_connection((self.address, 443), timeout=self.timeout)
-        try:
-            self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
-        except Exception:
-            sock.close()
-            raise
+    def connect_address(self, _requested_address, timeout, source_address=None):
+        return socket.create_connection((self.address, 443), timeout, source_address)
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+class PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+    def __init__(self, connection):
+        super().__init__()
+        self.connection = connection
+
+    def https_open(self, request):
+        return self.do_open(lambda _host, **_kwargs: self.connection, request)
 
 
 def request_wp(url, username, password, method, endpoint, body=None):
@@ -67,6 +78,7 @@ def request_wp(url, username, password, method, endpoint, body=None):
     addresses = public_addresses(parsed.hostname)
     conn = PinnedHTTPSConnection(parsed.hostname, addresses[0])
     authorization = base64.b64encode(f'{username}:{password}'.encode()).decode('ascii')
+    response = None
     try:
         path = parsed.path + '/wp-json/wp/v2' + endpoint
         # Authentication responses must be freshly fetched, as in the successful diagnostic.
@@ -76,14 +88,24 @@ def request_wp(url, username, password, method, endpoint, body=None):
         headers = {
             'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache',
             'Authorization': 'Basic ' + authorization,
-            'Accept': 'application/json', 'User-Agent': 'ZERO-SEO-OS/' + CONNECTOR_VERSION,
+            'Accept': 'application/json',
+            'User-Agent': ('ZERO-SEO-OS-ReadOnly-Check/1.0' if method == 'GET'
+                           else 'ZERO-SEO-OS/' + CONNECTOR_VERSION),
         }
-        if body is None:
-            conn.request(method, path, headers=headers)
-        else:
+        data = None
+        if body is not None:
             headers['Content-Type'] = 'application/json'
-            conn.request(method, path, body=json.dumps(body).encode('utf-8'), headers=headers)
-        response = conn.getresponse()
+            data = json.dumps(body).encode('utf-8')
+        # Match urllib's request construction used by the successful standalone check,
+        # while pinning the socket to the already validated public DNS address.
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}),
+                                             NoRedirect(), PinnedHTTPSHandler(conn))
+        request = urllib.request.Request('https://' + parsed.netloc + path,
+                                         data=data, headers=headers, method=method)
+        try:
+            response = opener.open(request, timeout=15)
+        except urllib.error.HTTPError as error:
+            response = error
         if response.status in (401, 403):
             # Surface only a bounded WP error code, never upstream messages or credentials.
             code = ''
@@ -107,6 +129,8 @@ def request_wp(url, username, password, method, endpoint, body=None):
             raise VerificationError('워드프레스 응답 형식이 올바르지 않습니다.')
         return data
     finally:
+        if response is not None:
+            response.close()
         conn.close()
 
 
@@ -276,7 +300,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    print('ZERO SEO OS connector v' + CONNECTOR_VERSION + ': http://' + HOST + ' (local only; fresh authentication requests)')
+    print('ZERO SEO OS connector v' + CONNECTOR_VERSION + ': http://' + HOST + ' (local only; urllib HTTPS with validated DNS)')
     httpd = ThreadingHTTPServer(('127.0.0.1', 8765), Handler)
     try:
         httpd.serve_forever()

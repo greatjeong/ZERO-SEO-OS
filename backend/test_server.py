@@ -78,8 +78,9 @@ class ConnectorTests(unittest.TestCase):
                  (200, 'text/html', {}, False), (301, 'application/json', {}, False),
                  (401, 'application/json', {}, False), (403, 'application/json', {}, False)]
         for status, content_type, body, success in cases:
-            response = MagicMock(status=status)
+            response = MagicMock(status=status, code=status)
             response.getheader.return_value = content_type
+            response.info.return_value = {'Content-Type': content_type}
             response.read.return_value = json.dumps(body).encode()
             conn = MagicMock()
             conn.getresponse.return_value = response
@@ -95,7 +96,7 @@ class ConnectorTests(unittest.TestCase):
 
 
     def test_authenticated_reads_have_fresh_urls_and_no_cache_headers(self):
-        response = MagicMock(status=200)
+        response = MagicMock(status=200, code=200)
         response.getheader.return_value = 'application/json'
         response.read.return_value = b'{"id":1,"username":"editor"}'
         conn = MagicMock()
@@ -106,12 +107,12 @@ class ConnectorTests(unittest.TestCase):
         paths = [call.args[1] for call in conn.request.call_args_list]
         self.assertNotEqual(paths[0], paths[1])
         for call in conn.request.call_args_list:
-            self.assertEqual(call.kwargs['headers']['Cache-Control'], 'no-cache, no-store')
-            self.assertIn('Authorization', call.kwargs['headers'])
+            self.assertEqual(call.args[3]['Cache-Control'], 'no-cache, no-store')
+            self.assertIn('Authorization', call.args[3])
             self.assertNotIn('dummy-password', call.args[1])
 
     def test_write_path_unchanged_and_no_automatic_retry(self):
-        response = MagicMock(status=201)
+        response = MagicMock(status=201, code=201)
         response.getheader.return_value = 'application/json'
         response.read.return_value = b'{"id":42,"status":"draft"}'
         conn = MagicMock()
@@ -121,6 +122,29 @@ class ConnectorTests(unittest.TestCase):
         token.assert_not_called()
         conn.request.assert_called_once()
         self.assertEqual(conn.request.call_args.args[:2], ('POST', '/wp-json/wp/v2/posts'))
+
+
+    def test_pinned_standard_tls_keeps_public_address_and_hostname_checks(self):
+        import ssl
+        connection = server.PinnedHTTPSConnection('example.com', '8.8.8.8')
+        self.assertTrue(connection._context.check_hostname)
+        self.assertEqual(connection._context.verify_mode, ssl.CERT_REQUIRED)
+        with patch.object(server.socket, 'create_connection') as create:
+            connection.connect_address(('another-name.example', 443), 15)
+            create.assert_called_once_with(('8.8.8.8', 443), 15, None)
+        connection.close()
+
+    def test_redirect_does_not_forward_credentials_or_retry(self):
+        response = MagicMock(status=302, code=302)
+        response.info.return_value = {'Location': 'https://attacker.example/'}
+        response.getheader.return_value = 'application/json'
+        conn = MagicMock()
+        conn.getresponse.return_value = response
+        with patch.object(server, 'public_addresses', return_value=['8.8.8.8']), patch.object(server, 'PinnedHTTPSConnection', return_value=conn):
+            with self.assertRaises(server.VerificationError):
+                server.request_identity('https://example.com', 'editor', 'dummy-password')
+        conn.request.assert_called_once()
+        self.assertNotIn('attacker', conn.request.call_args.args[1])
 
 
 class HttpTests(unittest.TestCase):
