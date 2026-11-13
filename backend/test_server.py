@@ -87,11 +87,40 @@ class ConnectorTests(unittest.TestCase):
                 if success:
                     server.request_identity('https://example.com/blog', 'editor', 'secret')
                     self.assertEqual(conn.request.call_args.args[0], 'GET')
-                    self.assertEqual(conn.request.call_args.args[1], '/blog/wp-json/wp/v2/users/me?context=edit')
+                    self.assertTrue(conn.request.call_args.args[1].startswith('/blog/wp-json/wp/v2/users/me?context=edit&_zero_check='))
                 else:
                     with self.assertRaises(server.VerificationError):
                         server.request_identity('https://example.com/blog', 'editor', 'secret')
                 conn.close.assert_called_once()
+
+
+    def test_authenticated_reads_have_fresh_urls_and_no_cache_headers(self):
+        response = MagicMock(status=200)
+        response.getheader.return_value = 'application/json'
+        response.read.return_value = b'{"id":1,"username":"editor"}'
+        conn = MagicMock()
+        conn.getresponse.return_value = response
+        with patch.object(server, 'public_addresses', return_value=['8.8.8.8']), patch.object(server, 'PinnedHTTPSConnection', return_value=conn), patch.object(server.secrets, 'token_hex', side_effect=['first', 'second']):
+            server.request_identity('https://example.com', 'editor', 'dummy-password')
+            server.request_identity('https://example.com', 'editor', 'dummy-password')
+        paths = [call.args[1] for call in conn.request.call_args_list]
+        self.assertNotEqual(paths[0], paths[1])
+        for call in conn.request.call_args_list:
+            self.assertEqual(call.kwargs['headers']['Cache-Control'], 'no-cache, no-store')
+            self.assertIn('Authorization', call.kwargs['headers'])
+            self.assertNotIn('dummy-password', call.args[1])
+
+    def test_write_path_unchanged_and_no_automatic_retry(self):
+        response = MagicMock(status=201)
+        response.getheader.return_value = 'application/json'
+        response.read.return_value = b'{"id":42,"status":"draft"}'
+        conn = MagicMock()
+        conn.getresponse.return_value = response
+        with patch.object(server, 'public_addresses', return_value=['8.8.8.8']), patch.object(server, 'PinnedHTTPSConnection', return_value=conn), patch.object(server.secrets, 'token_hex') as token:
+            server.request_wp('https://example.com', 'editor', 'dummy-password', 'POST', '/posts', {'status': 'draft'})
+        token.assert_not_called()
+        conn.request.assert_called_once()
+        self.assertEqual(conn.request.call_args.args[:2], ('POST', '/wp-json/wp/v2/posts'))
 
 
 class HttpTests(unittest.TestCase):

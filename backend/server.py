@@ -5,6 +5,7 @@ import ipaddress
 import json
 import os
 import re
+import secrets
 import socket
 import ssl
 import sqlite3
@@ -14,6 +15,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit, urlunsplit
 
+CONNECTOR_VERSION = '0.2.4'
 ORIGIN = 'http://127.0.0.1:5173'
 HOST = '127.0.0.1:8765'
 STATE_DB = Path(__file__).resolve().parent / '.state' / 'test-drafts.sqlite3'
@@ -67,9 +69,14 @@ def request_wp(url, username, password, method, endpoint, body=None):
     authorization = base64.b64encode(f'{username}:{password}'.encode()).decode('ascii')
     try:
         path = parsed.path + '/wp-json/wp/v2' + endpoint
+        # Authentication responses must be freshly fetched, as in the successful diagnostic.
+        # Keep POST endpoints unchanged: writes must never be retried or cache-busted.
+        if method == 'GET':
+            path += ('&' if '?' in path else '?') + '_zero_check=' + secrets.token_hex(8)
         headers = {
+            'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache',
             'Authorization': 'Basic ' + authorization,
-            'Accept': 'application/json', 'User-Agent': 'ZERO-SEO-OS/0.2.2',
+            'Accept': 'application/json', 'User-Agent': 'ZERO-SEO-OS/' + CONNECTOR_VERSION,
         }
         if body is None:
             conn.request(method, path, headers=headers)
@@ -269,7 +276,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    print('ZERO SEO OS connector: http://' + HOST + ' (local only)')
+    print('ZERO SEO OS connector v' + CONNECTOR_VERSION + ': http://' + HOST + ' (local only; fresh authentication requests)')
     httpd = ThreadingHTTPServer(('127.0.0.1', 8765), Handler)
     try:
         httpd.serve_forever()
