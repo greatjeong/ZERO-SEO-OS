@@ -1,0 +1,116 @@
+<!-- ZERO introduction v0.1 · Home의 사용자 정의 HTML 본문용.
+     기존 상단 메뉴·공지·푸터는 별도 영역입니다. 기존 CSS를 삭제할 필요 없습니다.
+     로그인·App 연결 전: 링크를 임의로 지정하지 않고 disabled로 표시합니다. -->
+<style>
+.zintro{--zi-navy:#071226;--zi-purple:#7c3aed;--zi-muted:#647087;--zi-line:#e8eaf1;width:100%;margin:0;background:#fff;color:var(--zi-navy);font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.65;text-align:left}
+.zintro,.zintro *{box-sizing:border-box}
+.zintro .zi-wrap{width:min(1080px,100%);margin-inline:auto;padding-inline:24px}
+.zintro .zi-hero{padding:76px 0 0;text-align:center;background:radial-gradient(ellipse at 50% 65%,#f6f1ff 0,transparent 65%)}
+.zintro .zi-eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 13px;border:1px solid #e9ddff;border-radius:30px;background:#faf7ff;color:#7438dc;font-size:12px;font-weight:650;letter-spacing:.02em}
+.zintro h1{max-width:900px;margin:24px auto 20px;color:var(--zi-navy);font-size:clamp(32px,4.2vw,52px);line-height:1.28;font-weight:800;letter-spacing:-.055em}
+.zintro h1 span{display:block;color:var(--zi-purple)}
+.zintro .zi-description{max-width:660px;margin:0 auto;color:var(--zi-muted);font-size:17px;line-height:1.85;word-break:keep-all}
+.zintro .zi-actions{display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap;margin-top:28px}
+.zintro .zi-button{display:inline-flex;align-items:center;justify-content:center;gap:16px;min-height:48px;padding:12px 24px;border:1px solid var(--zi-purple);border-radius:8px;background:var(--zi-purple);color:#fff;font-size:14px;font-weight:700;line-height:1.5;text-decoration:none;box-shadow:none}
+.zintro .zi-button:hover{background:#6925d0;border-color:#6925d0;color:#fff}
+.zintro .zi-button:focus-visible,.zintro summary:focus-visible{outline:3px solid #bca0ff;outline-offset:4px}
+.zintro .zi-button--waiting,.zintro .zi-button--waiting:hover{border-color:var(--zi-line);background:#f5f6fa;color:#8490a3;cursor:not-allowed}
+.zintro .zi-note{margin:13px auto 0;color:#8992a3;font-size:12px}
+.zintro .zi-product{margin:44px auto 0;border:1px solid #dfe3ef;border-radius:14px;background:#fff;box-shadow:0 16px 48px #07122609;text-align:left;overflow:hidden}
+.zintro .zi-product-top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--zi-line);font-size:12px}
+.zintro .zi-wordmark{color:var(--zi-navy);font-weight:800;letter-spacing:-.03em}.zintro .zi-wordmark b{color:var(--zi-purple)}
+.zintro .zi-sample{padding:3px 8px;border-radius:5px;background:#f4efff;color:#8656d3;font-size:10px;white-space:nowrap}
+.zintro .zi-product-body{display:grid;grid-template-columns:170px 1fr;min-height:280px}
+.zintro .zi-product-nav{display:flex;flex-direction:column;gap:7px;padding:23px 13px;background:#fafbfe;border-right:1px solid var(--zi-line)}
+.zintro .zi-product-nav span{padding:9px 12px;border-radius:6px;color:#7f889a;font-size:12px}
+.zintro .zi-product-nav .zi-selected{background:#eee7fd;color:#7333cf;font-weight:700}
+.zintro .zi-workspace{padding:25px 28px}
+.zintro .zi-workspace-title{margin:0;color:var(--zi-navy);font-size:16px;font-weight:750}
+.zintro .zi-workspace-copy{margin:5px 0 18px;color:#8c94a6;font-size:11px}
+.zintro .zi-connect{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 16px;border:1px solid var(--zi-line);border-radius:8px}
+.zintro .zi-connect strong{display:block;color:var(--zi-navy);font-size:12px}
+.zintro .zi-connect small{color:#8a94a6;font-size:10px}
+.zintro .zi-connect-label{padding:5px 9px;border-radius:5px;background:#f4efff;color:#8151cb;font-size:10px;white-space:nowrap}
+.zintro .zi-workflow{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-top:13px}
+.zintro .zi-mini{padding:13px 10px;border:1px solid #ecebf3;border-radius:8px;background:#fdfcff}
+.zintro .zi-mini small{display:block;color:#a08dbd;font-size:9px;letter-spacing:.06em}
+.zintro .zi-mini strong{display:block;margin:8px 0 3px;color:#3f4560;font-size:11px}
+.zintro .zi-mini span{color:#929bad;font-size:9px}
+.zintro .zi-section{padding:76px 0;border-bottom:1px solid #f0f1f6}
+.zintro .zi-section-head{margin-bottom:30px;text-align:center}
+.zintro .zi-kicker{color:var(--zi-purple);font-size:11px;font-weight:700;letter-spacing:.12em}
+.zintro h2{margin:10px 0 12px;color:var(--zi-navy);font-size:clamp(24px,3vw,32px);font-weight:750;line-height:1.4;letter-spacing:-.04em}
+.zintro .zi-section-head p{margin:0;color:var(--zi-muted);font-size:14px;word-break:keep-all}
+.zintro .zi-flow-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}
+.zintro .zi-flow-card{padding:25px 22px;border:1px solid var(--zi-line);border-radius:10px;background:#fff}
+.zintro .zi-number{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:8px;background:#f1eaff;color:var(--zi-purple);font-size:11px;font-weight:700}
+.zintro h3{margin:17px 0 9px;color:var(--zi-navy);font-size:16px;line-height:1.5;font-weight:700;letter-spacing:-.02em}
+.zintro .zi-flow-card p{margin:0;color:var(--zi-muted);font-size:13px;line-height:1.85;word-break:keep-all}
+.zintro .zi-scope-note{margin:23px 0 0;padding:14px 18px;border-radius:7px;background:#faf8ff;color:#89769d;font-size:12px;text-align:center}
+.zintro .zi-management{display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:center}
+.zintro .zi-management p{color:var(--zi-muted);font-size:14px;line-height:1.9;word-break:keep-all}
+.zintro .zi-menu-list{margin:0;padding:0;list-style:none}
+.zintro .zi-menu-list li{display:flex;gap:18px;padding:17px 0;border-bottom:1px solid var(--zi-line)}
+.zintro .zi-menu-list li:last-child{border:0}
+.zintro .zi-menu-list b{color:#b39acb;font-size:11px;padding-top:3px}
+.zintro .zi-menu-list strong{display:block;color:var(--zi-navy);font-size:14px}
+.zintro .zi-menu-list span{display:block;color:#7c879a;font-size:12px;margin-top:3px}
+.zintro .zi-faq{max-width:760px;margin-inline:auto}
+.zintro details{padding:17px 0;border-bottom:1px solid var(--zi-line)}
+.zintro summary{cursor:pointer;color:var(--zi-navy);font-size:14px;font-weight:650}
+.zintro details p{padding:8px 0 0;margin:0;color:var(--zi-muted);font-size:13px;line-height:1.9}
+.zintro .zi-closing{padding:62px 0 70px;text-align:center;background:#fcfaff}
+.zintro .zi-closing p{color:var(--zi-muted);font-size:14px}
+@media(max-width:767px){.zintro .zi-wrap{padding-inline:20px}.zintro .zi-hero{padding-top:46px}.zintro .zi-description{font-size:15px}.zintro .zi-product{margin-top:32px}.zintro .zi-product-body{grid-template-columns:1fr}.zintro .zi-product-nav{flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--zi-line);padding:10px}.zintro .zi-product-nav span{padding:6px 9px;font-size:10px}.zintro .zi-workspace{padding:20px 15px}.zintro .zi-flow-grid{grid-template-columns:repeat(2,1fr);gap:10px}.zintro .zi-flow-card{padding:20px 15px}.zintro .zi-section{padding:50px 0}.zintro .zi-management{grid-template-columns:1fr;gap:20px}.zintro .zi-workflow{grid-template-columns:repeat(2,1fr)}.zintro .zi-product-top{padding:12px 15px}.zintro .zi-note{max-width:300px}.zintro .zi-connect{padding:12px}}
+@media(prefers-reduced-motion:no-preference){.zintro .zi-button{transition:background .15s ease}}
+</style>
+<div class="zintro">
+  <section class="zi-hero" aria-labelledby="zi-title">
+    <div class="zi-wrap">
+      <div class="zi-eyebrow">Grow with ZERO · 콘텐츠 운영을 하나의 흐름으로</div>
+      <h1 id="zi-title">키워드부터 콘텐츠 확산까지,<span>하나의 작업 공간에서.</span></h1>
+      <p class="zi-description">키워드를 준비하고, 워드프레스 글을 작성하고,<br>PBN과 백링크 작업으로 이어지는 운영 시스템을 만들고 있습니다.</p>
+      <div class="zi-actions">
+        <a class="zi-button" href="#zi-how-it-works">서비스 살펴보기 <span aria-hidden="true">→</span></a>
+        <button class="zi-button zi-button--waiting" type="button" disabled>App · 준비 중</button>
+      </div>
+      <p class="zi-note">현재 비공개 개발 중입니다. 로그인과 App 연결은 순차적으로 제공됩니다.</p>
+      <div class="zi-product" aria-label="개발 방향을 설명하는 App 화면 구성 예시">
+        <div class="zi-product-top"><span class="zi-wordmark">ZERO <b>SEO OS</b></span><span class="zi-sample">화면 구성 예시 · 임시 서비스명</span></div>
+        <div class="zi-product-body">
+          <div class="zi-product-nav" aria-label="예시 화면의 네 메뉴"><span class="zi-selected">통합 관리</span><span>키워드 발굴</span><span>PBN 세팅</span><span>백링크 세팅</span></div>
+          <div class="zi-workspace">
+            <p class="zi-workspace-title">통합 관리</p>
+            <p class="zi-workspace-copy">각 메뉴에서 준비하고, 한곳에서 실행·확인하는 구조</p>
+            <div class="zi-connect"><div><strong>워드프레스 사이트 연결</strong><small>사이트 등록 → 인증 검증 → 작업 준비</small></div><span class="zi-connect-label">첫 번째 설정</span></div>
+            <div class="zi-workflow"><div class="zi-mini"><small>STEP 01</small><strong>키워드 준비</strong><span>발굴·선별</span></div><div class="zi-mini"><small>STEP 02</small><strong>글 작성</strong><span>검토·저장·발행</span></div><div class="zi-mini"><small>STEP 03</small><strong>PBN 작업</strong><span>원본 콘텐츠 연결</span></div><div class="zi-mini"><small>STEP 04</small><strong>백링크 작업</strong><span>실행·결과 관리</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="zi-section" id="zi-how-it-works" aria-labelledby="zi-flow-title">
+    <div class="zi-wrap">
+      <div class="zi-section-head"><span class="zi-kicker">ONE CONNECTED WORKFLOW</span><h2 id="zi-flow-title">따로 하던 작업을, 이어지는 과정으로.</h2><p>앞 단계의 결과를 다음 단계로 연결하는 것이 우리가 만드는 시스템의 방향입니다.</p></div>
+      <div class="zi-flow-grid">
+        <article class="zi-flow-card"><span class="zi-number">01</span><h3>키워드 발굴</h3><p>콘텐츠로 이어갈 키워드 후보를 모으고, 정해진 기준으로 검토·선별합니다.</p></article>
+        <article class="zi-flow-card"><span class="zi-number">02</span><h3>글 작성·발행</h3><p>선별한 키워드와 작성 기준을 바탕으로 글을 만들고, 확인 후 워드프레스로 연결합니다.</p></article>
+        <article class="zi-flow-card"><span class="zi-number">03</span><h3>PBN 작업</h3><p>원본 콘텐츠를 기준으로 설정한 PBN 사이트와 콘텐츠 연결 작업을 관리합니다.</p></article>
+        <article class="zi-flow-card"><span class="zi-number">04</span><h3>백링크 작업</h3><p>준비한 대상과 작업 기준에 따라 실행하고, 진행 상태와 결과를 기록합니다.</p></article>
+      </div>
+      <p class="zi-scope-note">전체 흐름은 개발 방향을 설명합니다. 키워드 발굴·AI 글 작성·PBN·백링크 실행은 아직 제공되지 않습니다.</p>
+    </div>
+  </section>
+  <section class="zi-section" aria-labelledby="zi-manage-title">
+    <div class="zi-wrap zi-management">
+      <div><span class="zi-kicker">PREPARE. CONNECT. MANAGE.</span><h2 id="zi-manage-title">설정은 각각,<br>실행과 관리는 한곳에서.</h2><p>워드프레스 사이트를 연결하고 작업에 필요한 기준을 준비합니다. 통합 관리에서는 글 작성부터 PBN·백링크까지 이어지는 작업과 결과를 확인하도록 구성합니다.</p></div>
+      <ul class="zi-menu-list"><li><b>01</b><div><strong>통합 관리</strong><span>사이트 연결 · 작업 실행 · 진행 상태와 결과 확인</span></div></li><li><b>02</b><div><strong>키워드 발굴</strong><span>키워드 후보 발굴 · 검토 · 작업할 키워드 준비</span></div></li><li><b>03</b><div><strong>PBN 세팅</strong><span>PBN 사이트와 작업 규칙 설정</span></div></li><li><b>04</b><div><strong>백링크 세팅</strong><span>작업 대상과 실행 규칙 설정</span></div></li></ul>
+    </div>
+  </section>
+  <section class="zi-section" aria-labelledby="zi-faq-title">
+    <div class="zi-wrap"><div class="zi-section-head"><span class="zi-kicker">BEFORE YOU START</span><h2 id="zi-faq-title">시작하기 전에 궁금한 점</h2></div>
+      <div class="zi-faq"><details><summary>지금 바로 가입해서 사용할 수 있나요?</summary><p>현재는 운영자 본인의 비공개 사용을 위한 개발 단계입니다. 공개 회원가입과 이용 안내는 준비된 후 제공할 예정입니다.</p></details><details><summary>워드프레스 사이트가 필요한가요?</summary><p>네. 콘텐츠를 저장·발행할 워드프레스 사이트를 연결하는 흐름으로 준비하고 있습니다. 연결 여부와 권한을 실제로 검증한 뒤 사용합니다.</p></details><details><summary>로그인하면 바로 App으로 이동하나요?</summary><p>로그인 후 소개 홈페이지로 돌아오고, 상단 App 메뉴를 선택해 작업 공간으로 들어가는 흐름으로 연결할 예정입니다. 현재 로그인과 App 진입은 아직 연결되지 않았습니다.</p></details></div>
+    </div>
+  </section>
+  <section class="zi-closing" aria-labelledby="zi-closing-title"><div class="zi-wrap"><h2 id="zi-closing-title">콘텐츠 운영의 다음 단계를 준비합니다.</h2><p>하나씩 준비하고, 연결하고, 결과를 확인하는 작업 공간.</p><div class="zi-actions"><button class="zi-button zi-button--waiting" type="button" disabled>로그인 · 준비 중</button><a class="zi-button" href="#zi-title">처음으로 <span aria-hidden="true">↑</span></a></div></div></section>
+</div>
