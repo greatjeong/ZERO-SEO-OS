@@ -115,3 +115,14 @@ test('WordPress credentials clear after save and success requires verification',
   await screen.findByText('HTTP 401')
   expect(screen.queryByText(/인증 연결 검증 성공/)).toBeNull()
 })
+
+test('existing draft registration requires preview confirmation and never creates posts', async () => {
+  await signedIn()
+  fireEvent.change(screen.getByLabelText('기존 초안 글 ID'), { target: { value: '738' } })
+  vi.spyOn(window, 'confirm').mockReturnValueOnce(false)
+  vi.mocked(fetch).mockResolvedValueOnce(json({ records: [{ record: { url: 'https://example.com', postId: 738, source: '사용자 직접 등록' } }] }))
+  click('기존 글 ID 등록 미리보기')
+  await waitFor(() => expect(window.confirm).toHaveBeenCalled())
+  expect(vi.mocked(fetch).mock.calls.filter(call => String(call[0]).includes('draft-history/import'))).toHaveLength(0)
+  expect(vi.mocked(fetch).mock.calls.some(call => String(call[0]).includes('/posts'))).toBe(false)
+})

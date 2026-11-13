@@ -22,7 +22,7 @@ from central_auth import hash_password, valid_hash, verify_password
 from central_store import Store, postgres_url
 from storage import validate
 
-VERSION = '0.3.2-wp-verification'
+VERSION = '0.3.3-draft-history'
 COOKIE = '__Host-zero_session'
 SESSION_SECONDS = 8 * 60 * 60
 MAX_BODY = 5 * 1024 * 1024
@@ -105,6 +105,8 @@ def create_app(settings=None):
     store = Store(cfg.data_dir, cfg.database_url)
     from central_wordpress import WordPressVault
     vault = WordPressVault(store, cfg.wp_key) if cfg.wp_key else None
+    from central_drafts import DraftHistory
+    drafts = DraftHistory(store, vault)
     auth_revision = hashlib.sha256(cfg.owner_hash.encode()).hexdigest()
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
@@ -202,6 +204,28 @@ def create_app(settings=None):
     def verify_wordpress(slot: str, request: Request):
         session(request, write=True)
         return require_vault().verify(slot)
+
+    @app.get('/api/draft-history')
+    def draft_records(request: Request):
+        session(request)
+        return {'records': drafts.list()}
+
+    @app.post('/api/draft-history/preview')
+    async def preview_draft_records(request: Request):
+        session(request, write=True)
+        payload = await read_json(request)
+        return {'records': drafts.preview(payload), 'wordpressChanged': False}
+
+    @app.post('/api/draft-history/import')
+    async def import_draft_records(request: Request):
+        session(request, write=True)
+        payload = await read_json(request)
+        return await run_in_threadpool(drafts.save, payload)
+
+    @app.post('/api/wordpress/{slot}/draft-history/{fingerprint}/check')
+    def check_draft_record(slot: str, fingerprint: str, request: Request):
+        session(request, write=True)
+        return drafts.check(slot, fingerprint)
 
     @app.get('/api/workspace')
     def workspace(request: Request):
