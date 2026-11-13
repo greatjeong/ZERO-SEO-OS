@@ -33,3 +33,9 @@ Thumbs.db
 # Browser test outputs
 frontend/test-results/
 frontend/playwright-report/
+
+# Central development data and SQLite sidecar files
+backend/.central-state/
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal

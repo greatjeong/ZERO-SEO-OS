@@ -13,7 +13,7 @@ npm run build
 npm run lint
 ```
 
-서버 회귀는 프로젝트 최상위에서 `python -m unittest discover -s backend -q`로 실행합니다. 테스트는 실제 WordPress 인증정보 없이 모의 외부 요청과 임시 DB를 사용합니다.
+중앙 개발 의존성은 프로젝트 최상위에서 `python -m pip install -r backend/requirements-central-dev.txt`로 설치합니다. 서버 회귀는 프로젝트 최상위에서 `python -m unittest discover -s backend -q`로 실행합니다. 테스트는 실제 WordPress 인증정보 없이 모의 외부 요청과 임시 DB를 사용합니다.
 
 ## 테스트 종류
 
@@ -37,3 +37,7 @@ E2E는 임시 브라우저 프로필을 사용하지만 로컬 서버에 샘플 
 ## 현재 연결 방식
 
 대시보드는 127.0.0.1:5173에서 실행되고 API 주소 127.0.0.1:8765를 호출합니다. 이는 로컬 테스트용입니다. 중앙 운영에서는 로그인·사용자별 권한·서버 저장을 갖춘 같은 출처 API로 전환해야 하며, Host/Origin 허용 범위를 넓히는 것만으로 서비스를 공개하지 않습니다.
+
+## 별도 중앙 진입점
+
+Vite 빌드는 기존 index.html과 새 central.html을 함께 만듭니다. central.html은 서비스 로그인 및 서버 데이터 기반 화면이고 기존 App의 localStorage 흐름과 분리됩니다. 중앙 API와 같은 HTTPS 출처에서 실행해야 Secure 쿠키가 작동합니다. 기존 로컬 Vite 실행만으로 중앙 API가 자동 준비되지는 않습니다. 중앙 코드·서버 환경·실제 미구현 범위는 [중앙 기반 구현](../docs/중앙기반-v0.3.0-구현.md)을 참조하세요. 중앙 DOM 회귀는 central.test.tsx에 있습니다.
