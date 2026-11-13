@@ -3,6 +3,7 @@ import './App.css'
 import './central.css'
 import CentralWordPress from './CentralWordPress'
 import CentralDraftHistory from './CentralDraftHistory'
+import CentralDraftSave from './CentralDraftSave'
 
 type Slot = 'A-1' | 'A-2'
 type Job = { id: string; site: Slot; keyword: string; status: string; createdAt: string }
@@ -148,6 +149,7 @@ export default function CentralApp() {
         <div className="site-switch">{(['A-1', 'A-2'] as const).map(slot => <button className={site === slot ? 'selected' : ''} key={slot} onClick={() => { setSite(slot); setKeyword('') }}>{slot} 사이트</button>)}</div>
         <section className="panel"><h2>{site} 사이트 정보</h2><div className="wp-fields"><label>사이트 이름<input value={data.sites[site].name} maxLength={100} onChange={event => changeData({ ...data, sites: { ...data.sites, [site]: { ...data.sites[site], name: event.target.value } } })} /></label><label>워드프레스 주소<input type="url" value={data.sites[site].url} placeholder="https://example.com" onChange={event => changeData({ ...data, sites: { ...data.sites, [site]: { ...data.sites[site], url: event.target.value } } })} /></label></div><CentralWordPress key={`${site}:${data.sites[site].url}:${workspace.revision}`} slot={site} url={data.sites[site].url} disabled={busy || dirty} api={api} /></section>
         <section className="panel"><CentralDraftHistory key={`${site}:${data.sites[site].url}:${workspace.revision}`} slot={site} url={data.sites[site].url} disabled={busy || dirty} api={api} /></section>
+        <section className="panel"><CentralDraftSave key={`${site}:${data.sites[site].url}:${workspace.revision}`} slot={site} url={data.sites[site].url} disabled={busy || dirty} api={api} /></section>
         <section className="panel"><h2>키워드 관리</h2><form className="keyword-form" onSubmit={event => { event.preventDefault(); addKeyword() }}><input aria-label="등록할 키워드" value={keyword} onChange={event => setKeyword(event.target.value)} /><button type="submit">키워드 등록</button></form>
           {!keywords.length && <p>등록된 키워드가 없습니다.</p>}{keywords.map(value => <div key={value} className="keyword-item"><strong>{value}</strong><button onClick={() => enqueue(value)}>작업 등록</button><button onClick={() => { if (window.confirm('키워드를 삭제할까요? 기존 작업 기록은 유지됩니다.')) changeData({ ...data, keywordsBySite: { ...data.keywordsBySite, [site]: keywords.filter(v => v !== value) } }) }}>삭제</button></div>)}
         </section>

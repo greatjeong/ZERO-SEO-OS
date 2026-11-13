@@ -126,3 +126,24 @@ test('existing draft registration requires preview confirmation and never create
   expect(vi.mocked(fetch).mock.calls.filter(call => String(call[0]).includes('draft-history/import'))).toHaveLength(0)
   expect(vi.mocked(fetch).mock.calls.some(call => String(call[0]).includes('/posts'))).toBe(false)
 })
+
+test('new draft requires history acknowledgment and explicit confirmation', async () => {
+  await signedIn()
+  expect((screen.getByRole('button', { name: '새 테스트 초안 저장' }) as HTMLButtonElement).disabled).toBe(true)
+  fireEvent.click(screen.getByRole('checkbox'))
+  vi.spyOn(window, 'confirm').mockReturnValue(false)
+  click('새 테스트 초안 저장')
+  expect(window.confirm).toHaveBeenCalled()
+  expect(vi.mocked(fetch).mock.calls.some(call => String(call[0]).endsWith('/test-draft'))).toBe(false)
+})
+
+test('draft readback success is removed when the next check fails', async () => {
+  await signedIn()
+  vi.mocked(fetch).mockResolvedValueOnce(json({ url: 'https://example.com', postId: 900, status: 'draft', draftConfirmed: true, checkedAt: '2026-11-13T00:00:00Z' }))
+  click('저장 결과 재확인 · 새 글 생성 안 함')
+  await screen.findByText(/초안 확인 완료 · 글 ID 900/)
+  vi.mocked(fetch).mockResolvedValueOnce(json({ message: '저장 결과 불확실' }, 502))
+  click('저장 결과 재확인 · 새 글 생성 안 함')
+  await screen.findByText('저장 결과 불확실')
+  expect(screen.queryByText(/초안 확인 완료 · 글 ID 900/)).toBeNull()
+})

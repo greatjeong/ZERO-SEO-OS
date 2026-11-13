@@ -22,7 +22,7 @@ from central_auth import hash_password, valid_hash, verify_password
 from central_store import Store, postgres_url
 from storage import validate
 
-VERSION = '0.3.3-draft-history'
+VERSION = '0.3.4-durable-draft'
 COOKIE = '__Host-zero_session'
 SESSION_SECONDS = 8 * 60 * 60
 MAX_BODY = 5 * 1024 * 1024
@@ -107,6 +107,8 @@ def create_app(settings=None):
     vault = WordPressVault(store, cfg.wp_key) if cfg.wp_key else None
     from central_drafts import DraftHistory
     drafts = DraftHistory(store, vault)
+    from central_draft_save import DraftSaver
+    draft_saver = DraftSaver(store, vault)
     auth_revision = hashlib.sha256(cfg.owner_hash.encode()).hexdigest()
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
@@ -226,6 +228,22 @@ def create_app(settings=None):
     def check_draft_record(slot: str, fingerprint: str, request: Request):
         session(request, write=True)
         return drafts.check(slot, fingerprint)
+
+    @app.get('/api/wordpress/{slot}/test-draft')
+    def test_draft_state(slot: str, request: Request):
+        session(request)
+        return draft_saver.state(slot)
+
+    @app.post('/api/wordpress/{slot}/test-draft')
+    async def save_test_draft(slot: str, request: Request):
+        session(request, write=True)
+        payload = await read_json(request)
+        return await run_in_threadpool(draft_saver.create, slot, payload)
+
+    @app.post('/api/wordpress/{slot}/test-draft/check')
+    def recheck_test_draft(slot: str, request: Request):
+        session(request, write=True)
+        return draft_saver.check(slot)
 
     @app.get('/api/workspace')
     def workspace(request: Request):
