@@ -1,0 +1,20 @@
+/* 공통 브랜드 값. 이전 헤더 CSS 외의 다른 CSS는 보존합니다. */
+:root {
+  --zb-navy: #071226;
+  --zb-purple: #7C3AED;
+  --zb-purple-hover: #6D28D9;
+  --zb-purple-light: #8B5CF6;
+  --zb-white: #FFFFFF;
+  --zb-header-border: #ECEEF3;
+  --zb-mobile-border: #EEF0F4;
+}
+/* 사용자 확인: 새 Site Header와 기존 내비가 중복 출력됨.
+   새 헤더가 Entire Site로 활성화된 상태에서만 사용합니다.
+   롤백 시 아래 숨김 규칙도 함께 제거합니다. */
+#site-navigation,
+#mobile-header { display: none !important; }
+/* 고정/따라다니는 푸터가 아니라 짧은 페이지의 하단 배치 */
+html, body { min-height: 100%; }
+body { min-height: 100vh; display: flex; flex-direction: column; }
+#page { width: 100%; flex: 1 0 auto; }
+.site-footer { width: 100%; margin-top: auto; flex-shrink: 0; }
