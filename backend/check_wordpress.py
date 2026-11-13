@@ -1,6 +1,5 @@
 """Read-only authentication check independent of ZERO connector transport."""
 import base64
-import getpass
 import json
 import re
 import secrets
@@ -8,6 +7,51 @@ import urllib.error
 import urllib.request
 
 BASE = 'https://a.webcreatorlabs.com'
+
+
+def read_password():
+    # Native masked entry supports ordinary Windows Ctrl+V without console key handling.
+    import tkinter as tk
+    try:
+        root = tk.Tk()
+    except tk.TclError:
+        print('INPUT_WINDOW_ERROR: Python Tk window could not open. Nothing sent.')
+        raise EOFError from None
+    root.title('ZERO SEO OS - Application Password')
+    root.resizable(False, False)
+    root.attributes('-topmost', True)
+    tk.Label(root, text='Paste the Application Password (not its name).', padx=20, pady=10).pack()
+    value = tk.StringVar(root)
+    entry = tk.Entry(root, textvariable=value, show='*', width=42)
+    entry.pack(padx=20, pady=5)
+    count = tk.StringVar(root)
+    tk.Label(root, textvariable=count).pack(padx=20, pady=5)
+    message = tk.StringVar(root, value='Expected: 24 letters / digits, spaces allowed.')
+    tk.Label(root, textvariable=message).pack(padx=20, pady=5)
+    result = []
+
+    def update_count(*_args):
+        compact = re.sub(r'\s+', '', value.get())
+        count.set('Characters without spaces: ' + str(len(compact)) + ' / 24')
+
+    def submit(_event=None):
+        compact = re.sub(r'\s+', '', value.get())
+        if re.fullmatch(r'[a-zA-Z0-9]{24}', compact) is None:
+            message.set('Not 24 letters / digits yet. Clear the box and paste once.')
+            return
+        result.append(compact)
+        value.set('')
+        root.destroy()
+
+    value.trace_add('write', update_count)
+    update_count()
+    tk.Button(root, text='Continue', command=submit).pack(padx=20, pady=12)
+    root.bind('<Return>', submit)
+    entry.focus_set()
+    root.mainloop()
+    if not result:
+        raise EOFError('Cancelled')
+    return result.pop()
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -54,7 +98,8 @@ def main():
     advertised = isinstance(auth, dict) and 'application-passwords' in auth
     print('APPLICATION_PASSWORDS_ADVERTISED=' + str(advertised))
     username = input('WordPress username: ').strip()
-    password = getpass.getpass('Application Password (hidden): ')
+    print('A masked password window will open. Paste once and click Continue.')
+    password = read_password()
     if not username or not password or ':' in username or any(c in username + password for c in '\r\n'):
         print('INPUT_ERROR: Missing or invalid credentials. Nothing sent.')
         return
