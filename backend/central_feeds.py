@@ -149,13 +149,14 @@ class FeedCollector:
             rows = db.execute(select(collections).order_by(collections.c.created_at.desc(), collections.c.id).limit(20)).mappings().all()
         return [json.loads(row['record']) for row in rows]
 
-    def create(self, payload):
+    def create(self, payload, discovery_source=None):
         if set(payload) != {'blogUrl'} or not isinstance(payload.get('blogUrl'), str): raise HTTPException(400, '블로그 HTTPS 주소를 입력하세요.')
         try: blog = checked_url(payload['blogUrl'].strip())
         except FeedError: raise HTTPException(400, '인증정보 없는 공개 HTTPS 블로그 주소가 필요합니다.') from None
         if not self.gate.acquire(blocking=False): raise HTTPException(429, 'RSS 수집이 진행 중입니다.')
         try:
             record = {'id': str(uuid.uuid4()), 'blogUrl': blog, 'createdAt': stamp(), 'stage': 3, 'status': 'unverified', 'posts': [], 'candidates': []}
+            if discovery_source is not None: record['searchSource'] = discovery_source
             try:
                 record.update(collect_blog(blog))
                 record['status'] = 'collected' if record['posts'] else 'empty'

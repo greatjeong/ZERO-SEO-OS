@@ -5,6 +5,8 @@ type Props = { api: (path: string, method?: string, body?: unknown) => Promise<a
 export default function CentralFeeds({ api }: Props) {
   const [url, setUrl] = useState('')
   const [records, setRecords] = useState<Collection[]>([])
+  const [selected, setSelected] = useState<Record<string, boolean>>({})
+  const [phrases, setPhrases] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('블로그 주소로 시작할 수 있습니다. 검색 API 없이 RSS만 읽습니다.')
   async function perform(action: () => Promise<void>) { if (busy) return; setBusy(true); try { await action() } catch (e) { setMessage(e instanceof Error ? e.message : '수집 결과 미확인') } finally { setBusy(false) } }
@@ -15,7 +17,8 @@ export default function CentralFeeds({ api }: Props) {
     </form><p>한 번에 피드 최대 500개 항목을 읽습니다. 피드의 공개 범위에 제한되며 전체 글 수집을 보장하지 않습니다. 제목 기반 후보는 검색용 핵심어 검토가 필요합니다.</p>
     {records.map(r => <article key={r.id} className="panel"><h3>{r.blogUrl}</h3><p>{r.status === 'collected' ? '수집 완료 · 선별 전' : r.status === 'empty' ? '글 없음' : '수집 미완료'} · {new Date(r.createdAt).toLocaleString('ko-KR')}</p><p>{r.feedUrl || r.reason}</p>{r.truncated && <p>500개 항목 제한으로 일부만 처리했습니다.</p>}<p>글 {r.posts.length}개 / 후보 {r.candidates.length}개 · 검색량 미측정 · 네이버·구글 노출 미검증</p>
       {r.candidates.length > 200 && <p>화면에는 처음 200개를 표시합니다. 전체 결과는 내려받을 수 있습니다.</p>}
-      {r.candidates.slice(0, 200).map((c, i) => <div className="keyword-item" key={i}><strong>{c.text}</strong><span>검토 전 후보 · 출처 {c.sources.length}개</span><span>{c.sources[0]?.sourceType === 'post_title' ? '글 제목' : '피드 분류'}</span></div>)}
+      {r.candidates.slice(0, 200).map((c, i) => <div className="keyword-item" key={i}><label><input aria-label={`${r.id} 후보 ${i + 1} 선택`} type="checkbox" checked={!!selected[`${r.id}:${i}`]} onChange={e => setSelected(old => ({ ...old, [`${r.id}:${i}`]: e.target.checked }))} />{c.text}</label><input aria-label={`${r.id} 후보 ${i + 1} 검색어`} maxLength={200} value={phrases[`${r.id}:${i}`] ?? c.text.slice(0, 200)} onChange={e => setPhrases(old => ({ ...old, [`${r.id}:${i}`]: e.target.value }))} /><span>검토 전 후보 · 출처 {c.sources.length}개</span><span>{c.sources[0]?.sourceType === 'post_title' ? '글 제목' : '피드 분류'}</span></div>)}
+      <p>제목에서 검색할 핵심어를 다듬고 최대 100개를 선택하세요. 원래 제목과 출처는 그대로 보존됩니다.</p><button disabled={busy || !r.candidates.some((_, i) => selected[`${r.id}:${i}`])} onClick={() => void perform(async () => { const selections = r.candidates.flatMap((c, i) => selected[`${r.id}:${i}`] ? [{ index: i, keyword: phrases[`${r.id}:${i}`] ?? c.text.slice(0, 200) }] : []); await api('keyword-bank/stage', 'POST', { collectionId: r.id, selections }); setMessage('검토 대기로 보냈습니다. 아래 키워드 DB·작성 준비 불러오기로 확인하세요. 아직 활성 DB 등록은 아닙니다.') })}>선택 후보를 검토 대기로 보내기</button>
       <button onClick={() => { const blob = URL.createObjectURL(new Blob([JSON.stringify(r, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = blob; a.download = `zero-rss-${r.id}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(blob), 1000) }}>수집 결과 JSON 내려받기</button>
     </article>)}
   </section>

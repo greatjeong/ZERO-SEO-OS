@@ -30,10 +30,11 @@ export default function CentralDiscovery({ api }: Props) {
       <button type="button" disabled={busy} onClick={() => void perform(load)}>검색 기록 다시 불러오기</button>
     </form>
     <p>검색 1회당 양쪽 API를 각 1회 요청합니다. 자동 재시도·2페이지 검색은 하지 않습니다. 실제 화면과의 일치 검증이 필요하며, 일부 영역이나 유형이 미확인이면 ‘없음’으로 단정하지 않습니다.</p>
-    {runs.map(run => <article key={run.id} className="panel"><h3>{run.keyword}</h3><p>{run.status === 'retrieved' ? '양쪽 결과 수신 · 최종 검증 전' : '검증 미완료'} · {new Date(run.createdAt).toLocaleString('ko-KR')}</p>
+    {runs.map(run => <article key={run.id} className="panel"><h3>{run.keyword}</h3><p>검색 기록 ID: {run.id}</p><p>{run.status === 'retrieved' ? '양쪽 결과 수신 · 최종 검증 전' : '검증 미완료'} · {new Date(run.createdAt).toLocaleString('ko-KR')}</p>
       {['naver', 'google'].map(name => { const engine = run.engines[name]; return <div key={name}><h4>{name === 'naver' ? '네이버' : '구글'} · {engine.status === 'retrieved' ? '결과 수신' : '미확인'} · {engine.targetPresence === 'present' ? '대상 유형 발견' : '노출 여부 미확인'}</h4>
         <p>인식 가능한 검색 영역만 수집 · 광고 및 네이버 블로그 제외 · 순위는 해당 영역 내 번호</p>
         {engine.results.map(row => <div className="keyword-item" key={row.id}><div><strong>{row.title}</strong><p>{kinds[row.platform] || '유형 미확인'} · {row.section} · 영역 내 {row.sectionPosition ?? '미기록'}</p>{safeLink(row.url) && <a href={row.url} target="_blank" rel="noopener noreferrer">{row.url}</a>}<p>블로그 기준 주소: {row.blogOrigin} · 근거: {row.evidence}</p></div>
+          {['tistory', 'wordpress'].includes(row.platform) && <button disabled={busy || run.status !== 'retrieved'} onClick={() => void perform(async () => { const value = await api('feed-collections/from-discovery', 'POST', { runId: run.id, resultId: row.id }); setMessage(value.status === 'collected' ? 'RSS를 수집했습니다. RSS 수집 기록 불러오기로 후보를 확인하세요.' : 'RSS 수집 미완료 · 수집 기록에서 이유를 확인하세요.') })}>이 블로그 RSS 수집</button>}
           {row.platform !== 'tistory' && <button disabled={busy} onClick={() => void perform(async () => { replace(await api(`discovery/${run.id}/results/${row.id}/inspect`, 'POST')); setMessage('사이트 유형 확인 결과를 저장했습니다. 미확인은 워드프레스가 아니라는 뜻이 아닙니다.') })}>워드프레스 여부 확인</button>}
         </div>)}
       </div> })}

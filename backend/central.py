@@ -114,6 +114,8 @@ def create_app(settings=None):
     discovery = Discovery(store, SerpProvider(cfg.search_key) if cfg.search_key else None)
     from central_feeds import FeedCollector
     feeds = FeedCollector(store)
+    from central_keyword_bank import KeywordBank
+    bank = KeywordBank(store, discovery)
     auth_revision = hashlib.sha256(cfg.owner_hash.encode()).hexdigest()
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
@@ -249,6 +251,66 @@ def create_app(settings=None):
     def recheck_test_draft(slot: str, request: Request):
         session(request, write=True)
         return draft_saver.check(slot)
+
+    @app.get('/api/keyword-bank')
+    def keyword_bank(request: Request, offset: int = 0):
+        session(request)
+        return bank.list(offset)
+
+    @app.get('/api/keyword-bank/export')
+    def export_keyword_bank(request: Request):
+        session(request)
+        return bank.export()
+
+    @app.post('/api/keyword-bank/stage')
+    async def stage_candidates(request: Request):
+        session(request, write=True)
+        return await run_in_threadpool(bank.stage, await read_json(request))
+
+    @app.get('/api/keyword-bank/{key}/history')
+    def keyword_history(key: str, request: Request):
+        session(request)
+        return {'events': bank.history(key)}
+
+    @app.post('/api/keyword-bank/{key}/check')
+    async def check_keyword(key: str, request: Request):
+        session(request, write=True)
+        return await run_in_threadpool(bank.check, key, await read_json(request))
+
+    @app.post('/api/keyword-bank/{key}/evidence')
+    async def attach_keyword_evidence(key: str, request: Request):
+        session(request, write=True)
+        return await run_in_threadpool(bank.attach, key, await read_json(request))
+
+    @app.post('/api/keyword-bank/{key}/review')
+    async def review_keyword(key: str, request: Request):
+        session(request, write=True)
+        return await run_in_threadpool(bank.review, key, await read_json(request))
+
+    @app.post('/api/keyword-bank/{key}/handoff')
+    async def handoff_keyword(key: str, request: Request):
+        session(request, write=True)
+        return await run_in_threadpool(bank.handoff, key, await read_json(request))
+
+    @app.get('/api/article-preparations')
+    def article_preparations(request: Request):
+        session(request)
+        return {'preparations': bank.queue()}
+
+    @app.post('/api/feed-collections/from-discovery')
+    async def feed_from_discovery(request: Request):
+        session(request, write=True)
+        payload = await read_json(request)
+        if set(payload) != {'runId', 'resultId'} or not all(isinstance(v, str) for v in payload.values()):
+            raise HTTPException(400, '검색 출처를 확인하세요.')
+        run = discovery.get(payload['runId'])
+        if run['status'] != 'retrieved':
+            raise HTTPException(409, '양쪽 검색 결과를 먼저 확인하세요.')
+        for engine in run['engines'].values():
+            for result in engine['results']:
+                if result['id'] == payload['resultId'] and result['platform'] in ('wordpress', 'tistory'):
+                    return await run_in_threadpool(feeds.create, {'blogUrl': result['blogOrigin']}, {'runId': run['id'], 'resultId': result['id'], 'keyword': run['keyword']})
+        raise HTTPException(409, '블로그 유형을 먼저 확인하세요.')
 
     @app.get('/api/feed-collections')
     def feed_history(request: Request):
