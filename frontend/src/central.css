@@ -97,3 +97,7 @@ body:has(.central-shell) { background: #f5f6fa; color: #071226; }
 .central-activity-meta { font-size: 11px; color: #8a93a5; }
 .central-activity-row strong { font-size: 12px; }
 @media(max-width:760px) { .central-activity-row { align-items: flex-start; flex-direction: column; } }
+.central-authoring textarea { display: block; width: 100%; padding: 12px; font: inherit; line-height: 1.7; color: #071226; background: #fff; border: 1px solid #dfe3ec; border-radius: 8px; resize: vertical; }
+.central-authoring > label > input:not([type='checkbox']) { width: 100%; }
+.central-brief { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow: auto; background: #f7f8fc; color: #44516b; padding: 16px; font-size: 12px; }
+.central-research-summary { padding: 16px; background: #f8f5ff; border-radius: 8px; margin-top: 18px; }

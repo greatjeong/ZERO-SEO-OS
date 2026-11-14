@@ -116,6 +116,8 @@ def create_app(settings=None):
     feeds = FeedCollector(store)
     from central_keyword_bank import KeywordBank
     bank = KeywordBank(store, discovery)
+    from central_authoring import Authoring
+    authoring = Authoring(store, bank)
     auth_revision = hashlib.sha256(cfg.owner_hash.encode()).hexdigest()
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
@@ -251,6 +253,46 @@ def create_app(settings=None):
     def recheck_test_draft(slot: str, request: Request):
         session(request, write=True)
         return draft_saver.check(slot)
+
+    @app.post('/api/authoring/{key}/open')
+    def open_authoring(key: str, request: Request):
+        session(request, write=True)
+        return authoring.open(key)
+
+    @app.get('/api/authoring/{key}')
+    def read_authoring(key: str, request: Request):
+        session(request)
+        return authoring.read(key)
+
+    @app.get('/api/authoring/{key}/brief')
+    def authoring_brief(key: str, request: Request):
+        session(request)
+        return authoring.package(key)
+
+    @app.get('/api/authoring/{key}/history')
+    def authoring_history(key: str, request: Request):
+        session(request)
+        return {'versions': authoring.history(key)}
+
+    @app.post('/api/authoring/{key}/research')
+    async def authoring_research(key: str, request: Request):
+        session(request, write=True)
+        return await run_in_threadpool(authoring.research, key, await read_json(request))
+
+    @app.post('/api/authoring/{key}/generate')
+    async def authoring_generate(key: str, request: Request):
+        session(request, write=True)
+        return await run_in_threadpool(authoring.generate, key, await read_json(request))
+
+    @app.put('/api/authoring/{key}')
+    async def edit_authoring(key: str, request: Request):
+        session(request, write=True)
+        return await run_in_threadpool(authoring.edit, key, await read_json(request))
+
+    @app.post('/api/authoring/{key}/review')
+    async def review_authoring(key: str, request: Request):
+        session(request, write=True)
+        return await run_in_threadpool(authoring.review, key, await read_json(request))
 
     @app.get('/api/activity')
     def recent_activity(request: Request):
