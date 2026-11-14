@@ -1,10 +1,86 @@
-.central-shell { max-width: 1200px; margin: 0 auto; padding: 32px 20px; }
-.central-shell .panel { margin: 20px 0; }
+/* Central App only. Keep legacy local App styles unchanged. */
+body:has(.central-shell) { background: #f5f6fa; color: #071226; }
+#root:has(.central-shell) { width: 100%; max-width: none; text-align: left; border: 0; }
+.central-shell { font-family: Pretendard, 'Noto Sans KR', Arial, sans-serif; min-height: 100vh; color: #071226; font-size: 14px; line-height: 1.6; letter-spacing: -.02em; color-scheme: light; }
+.central-shell h1,.central-shell h2,.central-shell h3,.central-shell h4 { font-family: inherit; color: #071226; font-weight: 750; line-height: 1.4; letter-spacing: -.04em; }
+.central-shell h1 { font-size: 21px; margin: 0; }
+.central-shell h2 { font-size: 19px; margin: 0 0 10px; }
+.central-shell h3 { font-size: 16px; margin: 8px 0; }
+.central-shell h4 { font-size: 14px; }
+.central-shell p { margin: 8px 0; color: #65718a; }
+.central-shell a { color: #6d28d9; overflow-wrap: anywhere; }
+.central-shell button { font: inherit; cursor: pointer; padding: 9px 14px; background: white; border: 1px solid #dfe3ec; border-radius: 8px; color: #25324d; transition: background .15s; }
+.central-shell button:hover { background: #f4efff; border-color: #cbb8f7; }
+.central-shell button:disabled { cursor: default; opacity: .5; }
+.central-shell :is(button,input,select,summary,a):focus-visible { outline: 2px solid #7c3aed; outline-offset: 3px; }
+.central-shell input,.central-shell select { font: inherit; padding: 10px 12px; max-width: 100%; border: 1px solid #dfe3ec; border-radius: 7px; color: #071226; background: #fff; }
+.central-shell label { display: block; margin: 8px 0; }
+.central-shell .panel { background: white; padding: 24px; border: 1px solid #e6e8f0; border-radius: 12px; margin: 20px 0; box-shadow: none; overflow-wrap: anywhere; }
+.central-shell [hidden] { display: none !important; }
 .central-fields { border: 0; margin: 0; padding: 0; min-width: 0; }
-.central-login { max-width: 520px; margin: 40px auto !important; }
+.central-layout { display: grid; grid-template-columns: 238px minmax(0,1fr); }
+.central-layout.nav-collapsed { grid-template-columns: 82px minmax(0,1fr); }
+.central-sidebar { background: #071226; color: #a5b1ca; padding: 24px 14px; display: flex; flex-direction: column; min-width: 0; }
+.central-brand { display: flex; align-items: center; gap: 6px; padding: 0 4px; }
+.central-brand a { display: flex; align-items: center; gap: 10px; text-decoration: none; color: #fff; white-space: nowrap; }
+.central-brand-mark { background: linear-gradient(135deg,#9d65ff,#6d28d9); color: white; font-size: 21px; font-weight: 900; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 8px; flex: 0 0 34px; }
+.central-brand-name { font-weight: 800; font-size: 16px; }
+.central-brand-name b { font-weight: 500; color: #b6a5db; font-size: 12px; }
+.central-shell .central-collapse { margin-left: auto; border: 0; background: transparent; color: #a5b1ca; padding: 5px; }
+.central-sidebar .central-nav-caption { color: #63738e; font-size: 10px; letter-spacing: .15em; margin: 44px 14px 14px; }
+.central-sidebar nav { display: grid; gap: 8px; }
+.central-sidebar nav button { display: flex; align-items: center; gap: 12px; text-align: left; border: 1px solid transparent; color: #a9b5cb; background: transparent; padding: 13px 14px; }
+.central-sidebar nav button[aria-current='page'] { background: #7c3aed; color: white; border-color: #9760f6; }
+.central-sidebar nav button:hover { background: #19243c; color: white; }
+.central-nav-icon { font-size: 21px; width: 22px; text-align: center; line-height: 1; flex-shrink: 0; }
+.central-sidebar-bottom { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 22px 10px 0; border-top: 1px solid #1a2942; margin-top: 80px; font-size: 11px; }
+.central-sidebar-bottom .central-brand-name { display: block; width: 100%; font-size: 10px; font-weight: 400; color: #6d7b96; }
+.central-private-dot { width: 6px; height: 6px; background: #a788e8; border-radius: 50%; }
+.nav-collapsed .central-sidebar .central-brand-name,.nav-collapsed .central-nav-name,.nav-collapsed .central-nav-caption,.nav-collapsed .central-sidebar-bottom { display: none; }
+.nav-collapsed .central-brand { flex-wrap: wrap; justify-content: center; padding: 0; }
+.nav-collapsed .central-collapse { margin: 8px 0; }
+.nav-collapsed .central-sidebar nav { margin-top: 28px; }
+.nav-collapsed .central-sidebar nav button { justify-content: center; padding: 14px 8px; }
+.central-content { min-width: 0; }
+.central-topbar { min-height: 92px; background: #fff; border-bottom: 1px solid #e6e8f0; padding: 20px 32px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.central-topbar-title { display: flex; align-items: center; gap: 16px; }
+.central-overline,.central-shell p.central-overline { font-size: 9px; letter-spacing: .15em; font-weight: 800; color: #8d6ebd; margin: 0 0 4px; }
+.central-topbar-title p:last-child { margin: 4px 0 0; font-size: 12px; }
+.central-topbar-actions { display: flex; align-items: center; gap: 18px; flex-shrink: 0; font-size: 12px; }
+.central-owner-label { color: #796596; background: #f4efff; border-radius: 20px; padding: 6px 12px; }
+.central-help { position: relative; }
+.central-help summary { cursor: pointer; padding: 5px; }
+.central-help > div { position: absolute; z-index: 5; right: 0; width: min(320px,80vw); padding: 20px; background: white; border: 1px solid #e6e8f0; border-radius: 12px; box-shadow: 0 12px 35px #0712261a; }
+.central-workspace { padding: 24px 32px 48px; min-width: 0; }
+.central-shell .central-mobile-toggle { display: none; }
+.central-overview { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 12px 0 20px; }
+.central-overview > div > span,.central-section-intro > span { font-size: 10px; letter-spacing: .12em; font-weight: 700; color: #7c3aed; }
+.central-overview h2 { font-size: 24px; margin: 8px 0; }
+.central-overview button { background: #7c3aed; color: white; border-color: #7c3aed; flex-shrink: 0; }
+.central-overview button:hover { background: #6d28d9; }
+.central-stat-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; }
+.central-stat-grid article { background: white; padding: 20px 22px; border: 1px solid #e6e8f0; border-radius: 12px; }
+.central-stat-grid article > span { color: #66728b; font-size: 12px; }
+.central-stat-grid strong { display: block; margin-top: 8px; font-size: 27px; }
+.central-stat-grid small { font-size: 14px; font-weight: 400; color: #9da4b3; }
+.central-stat-grid p { font-size: 11px; }
+.central-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.central-empty { background: #f8f9fc; border: 1px dashed #dce1ec; padding: 26px; text-align: center; margin: 16px 0; color: #8590a6; border-radius: 8px; }
+.central-state { padding: 4px 9px; border-radius: 6px; font-size: 11px; }
+.central-state.ready { color: #187455; background: #eaf7f0; }
+.central-state.pending { color: #8f650d; background: #fff6df; }
+.central-section-intro { margin: 12px 0 24px; }
+.central-section-intro h2 { font-size: 23px; margin-top: 8px; }
+.central-placeholder { min-height: 320px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+.central-placeholder-icon { font-size: 40px; color: #a38bc8; margin-bottom: 12px; }
+.central-shell .backup-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+.central-shell .keyword-item,.central-shell .job-item { flex-wrap: wrap; gap: 12px; }
+.central-shell .keyword-item > div { min-width: 0; }
+.central-shell .keyword-form { flex-wrap: wrap; }
+.central-auth .central-topbar { padding-left: max(24px,calc((100% - 1000px)/2)); }
+.central-auth .central-workspace { max-width: 1000px; margin: auto; }
+.central-login { max-width: 480px; margin: 48px auto !important; }
 .central-login form { display: grid; gap: 16px; }
 .central-login label { display: grid; gap: 8px; }
-.central-shell button { cursor: pointer; padding: 9px 14px; }
-.central-shell button:disabled { cursor: default; opacity: .55; }
-.central-shell input { padding: 10px; max-width: 100%; }
-.central-shell .backup-actions { flex-wrap: wrap; }
+@media(max-width:1050px) { .central-layout { grid-template-columns: 210px minmax(0,1fr); } .central-workspace { padding: 20px; } .central-topbar { padding: 18px 20px; } .central-stat-grid { gap: 10px; } .central-stat-grid article { padding: 16px; } .central-shell .panel { padding: 20px; } }
+@media(max-width:760px) { .central-layout,.central-layout.nav-collapsed { display: block; } .central-sidebar { display: none; padding: 18px; } .mobile-open .central-sidebar { display: flex; } .central-sidebar nav { grid-template-columns: repeat(2,minmax(0,1fr)); } .central-shell .central-collapse,.central-nav-caption,.central-sidebar-bottom { display: none; } .nav-collapsed .central-sidebar .central-brand-name,.nav-collapsed .central-nav-name { display: inline; } .nav-collapsed .central-brand { justify-content: flex-start; } .nav-collapsed .central-sidebar nav { margin-top: 18px; } .central-brand { margin-bottom: 18px; } .central-shell .central-mobile-toggle { display: block; } .central-topbar { padding: 16px; gap: 8px; } .central-topbar-title p:last-child { display: none; } .central-topbar-actions { gap: 6px; } .central-owner-label { display: none; } .central-workspace { padding: 16px; } .central-overview { display: block; } .central-overview h2 { font-size: 20px; } .central-stat-grid { grid-template-columns: 1fr; } .central-shell .panel { padding: 18px; } .central-card-heading { align-items: flex-start; flex-direction: column; } .central-shell .wp-fields { grid-template-columns: 1fr; } }
