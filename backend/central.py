@@ -112,6 +112,8 @@ def create_app(settings=None):
     draft_saver = DraftSaver(store, vault)
     from central_discovery import Discovery, SerpProvider
     discovery = Discovery(store, SerpProvider(cfg.search_key) if cfg.search_key else None)
+    from central_feeds import FeedCollector
+    feeds = FeedCollector(store)
     auth_revision = hashlib.sha256(cfg.owner_hash.encode()).hexdigest()
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
@@ -247,6 +249,17 @@ def create_app(settings=None):
     def recheck_test_draft(slot: str, request: Request):
         session(request, write=True)
         return draft_saver.check(slot)
+
+    @app.get('/api/feed-collections')
+    def feed_history(request: Request):
+        session(request)
+        return {'collections': feeds.list()}
+
+    @app.post('/api/feed-collections')
+    async def collect_feed(request: Request):
+        session(request, write=True)
+        payload = await read_json(request)
+        return await run_in_threadpool(feeds.create, payload)
 
     @app.get('/api/discovery')
     def discovery_history(request: Request):
