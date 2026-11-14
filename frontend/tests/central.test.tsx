@@ -65,7 +65,7 @@ test('conflict never replaces unsaved edits or automatically retries', async () 
   vi.mocked(fetch).mockResolvedValueOnce(json({ message: '다른 창에서 먼저 저장했습니다.' }, 409))
   click('변경 사항 서버 저장'); await screen.findByText('다른 창에서 먼저 저장했습니다.', { exact: true })
   expect(screen.getByText('충돌 변경', { exact: true })).toBeTruthy()
-  expect(fetch).toHaveBeenCalledTimes(3)
+  expect(vi.mocked(fetch).mock.calls.filter(call => call[0] !== '/api/discovery')).toHaveLength(3)
 })
 
 test('backup import preview cancellation never writes', async () => {
@@ -76,7 +76,7 @@ test('backup import preview cancellation never writes', async () => {
   Object.defineProperty(file, 'text', { value: async () => JSON.stringify({ ...data, version: 1 }) })
   fireEvent.change(screen.getByLabelText('v1/v2 JSON 가져오기'), { target: { files: [file] } })
   await waitFor(() => expect(window.confirm).toHaveBeenCalled())
-  expect(fetch).toHaveBeenCalledTimes(3)
+  expect(vi.mocked(fetch).mock.calls.filter(call => call[0] !== '/api/discovery')).toHaveLength(3)
   expect(vi.mocked(fetch).mock.calls.at(-1)![0]).toBe('/api/import/preview')
   expect(screen.getByText('기존 키워드', { exact: true })).toBeTruthy()
 })
@@ -85,7 +85,7 @@ test('missing workspace is not silently initialized', async () => {
   vi.mocked(fetch).mockResolvedValueOnce(json({ authenticated: true, csrf: 'csrf' })).mockResolvedValueOnce(json({ revision: 0, data: null }))
   render(<CentralApp />)
   await screen.findByRole('heading', { name: '서버 작업 공간이 비어 있습니다' })
-  expect(fetch).toHaveBeenCalledTimes(2)
+  expect(vi.mocked(fetch).mock.calls.filter(call => call[0] !== '/api/discovery')).toHaveLength(2)
   expect(screen.getByRole('button', { name: '빈 작업 공간으로 시작' })).toBeTruthy()
 })
 

@@ -37,6 +37,7 @@ class Settings:
 
     database_url: str | None = field(default=None, repr=False)
     wp_key: str | None = field(default=None, repr=False)
+    search_key: str | None = field(default=None, repr=False)
 
     def __post_init__(self):
         p = urlsplit(self.origin)
@@ -63,7 +64,7 @@ class Settings:
             password = os.environ.get('ZERO_OWNER_PASSWORD', '')
             encoded = hash_password(password)
         origin = os.environ.get('ZERO_CENTRAL_ORIGIN') or os.environ.get('RENDER_EXTERNAL_URL', '')
-        return cls(origin.rstrip('/'), Path(directory) if directory else None, encoded, database_url=database, wp_key=os.environ.get('ZERO_WP_ENCRYPTION_KEY'))
+        return cls(origin.rstrip('/'), Path(directory) if directory else None, encoded, database_url=database, wp_key=os.environ.get('ZERO_WP_ENCRYPTION_KEY'), search_key=os.environ.get('ZERO_SERPAPI_KEY'))
 
 
 async def read_json(request):
@@ -109,6 +110,8 @@ def create_app(settings=None):
     drafts = DraftHistory(store, vault)
     from central_draft_save import DraftSaver
     draft_saver = DraftSaver(store, vault)
+    from central_discovery import Discovery, SerpProvider
+    discovery = Discovery(store, SerpProvider(cfg.search_key) if cfg.search_key else None)
     auth_revision = hashlib.sha256(cfg.owner_hash.encode()).hexdigest()
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
@@ -157,7 +160,7 @@ def create_app(settings=None):
 
     @app.get('/api/health')
     def health():
-        return {'version': VERSION, 'mode': 'private-owner', 'database': store.kind, 'wordpressEnabled': vault is not None}
+        return {'version': VERSION, 'mode': 'private-owner', 'database': store.kind, 'wordpressEnabled': vault is not None, 'searchEnabled': discovery.provider is not None}
 
     @app.post('/api/login')
     async def login(request: Request):
@@ -244,6 +247,22 @@ def create_app(settings=None):
     def recheck_test_draft(slot: str, request: Request):
         session(request, write=True)
         return draft_saver.check(slot)
+
+    @app.get('/api/discovery')
+    def discovery_history(request: Request):
+        session(request)
+        return {'configured': discovery.provider is not None, 'runs': discovery.list()}
+
+    @app.post('/api/discovery')
+    async def discover_keyword(request: Request):
+        session(request, write=True)
+        payload = await read_json(request)
+        return await run_in_threadpool(discovery.create, payload)
+
+    @app.post('/api/discovery/{run_id}/results/{result_id}/inspect')
+    def inspect_discovery_result(run_id: str, result_id: str, request: Request):
+        session(request, write=True)
+        return discovery.inspect(run_id, result_id)
 
     @app.get('/api/workspace')
     def workspace(request: Request):

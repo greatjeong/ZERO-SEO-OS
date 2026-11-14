@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 import './central.css'
+import CentralDiscovery from './CentralDiscovery'
 import CentralWordPress from './CentralWordPress'
 import CentralDraftHistory from './CentralDraftHistory'
 import CentralDraftSave from './CentralDraftSave'
@@ -33,16 +34,16 @@ export default function CentralApp() {
   const csrf = useRef<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
-  async function api(path: string, method = 'GET', body?: unknown) {
+  const api = useCallback(async (path: string, method = 'GET', body?: unknown) => {
     const headers: Record<string, string> = {}
     if (body !== undefined) headers['Content-Type'] = 'application/json'
     if (method !== 'GET' && csrf.current) headers['X-CSRF-Token'] = csrf.current
-    const response = await fetch(`/api/${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(20000) })
+    const response = await fetch(`/api/${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(path === 'discovery' && method === 'POST' ? 45000 : 20000) })
     let result
     try { result = await response.json() } catch { throw new Error('서버 응답 형식을 확인하지 못했습니다.') }
     if (!response.ok) throw new Error(typeof result.message === 'string' ? result.message : '요청 결과를 확인하지 못했습니다.')
     return result
-  }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -144,6 +145,7 @@ export default function CentralApp() {
         <button disabled={busy} onClick={() => { setPassword(''); setPhase('login'); setMessage('서비스 비밀번호로 다시 로그인하세요. 작성 중인 변경은 유지됩니다.') }}>로그인 갱신</button>
         <button disabled={busy} onClick={() => void run(async () => { if (dirty && !window.confirm('저장 전 변경을 버리고 로그아웃할까요?')) return; await api('logout', 'POST'); csrf.current = null; setWorkspace({ revision: 0, data: null }); setDirty(false); setSnapshots([]); setPhase('login'); setMessage('로그아웃했습니다.') })}>로그아웃</button>
       </div><p>다른 PC에서는 서버에 저장한 버전을 불러옵니다. 브라우저 로컬 데이터는 자동으로 가져오거나 지우지 않습니다.</p></section>
+      <CentralDiscovery api={api} />
       {!data && <section className="panel"><h2>서버 작업 공간이 비어 있습니다</h2><p>기존 데이터가 있으면 아래 JSON 가져오기를 먼저 이용하세요.</p><button disabled={busy} onClick={() => void run(async () => { if (window.confirm('기존 브라우저 데이터는 그대로 두고 빈 서버 작업 공간을 만들까요?')) await persist(emptyData()) })}>빈 작업 공간으로 시작</button></section>}
       {data && <fieldset className="central-fields" disabled={busy}>
         <div className="site-switch">{(['A-1', 'A-2'] as const).map(slot => <button className={site === slot ? 'selected' : ''} key={slot} onClick={() => { setSite(slot); setKeyword('') }}>{slot} 사이트</button>)}</div>
