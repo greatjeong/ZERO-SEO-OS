@@ -252,6 +252,12 @@ def create_app(settings=None):
         session(request, write=True)
         return draft_saver.check(slot)
 
+    @app.get('/api/activity')
+    def recent_activity(request: Request):
+        session(request)
+        from central_activity import activity
+        return activity(store)
+
     @app.get('/api/keyword-bank')
     def keyword_bank(request: Request, offset: int = 0):
         session(request)

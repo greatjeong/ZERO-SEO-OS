@@ -210,3 +210,15 @@ test('keyword bank preparation records appear in dashboard without a duplicate p
   expect(screen.getByText('키워드 발굴에서 조회한 최신 작성 준비 기록입니다.')).toBeTruthy()
   expect(screen.getByText('작성 준비',{exact:true})).toBeTruthy()
 })
+
+test('activity recovery navigation opens search workspace without executing searches', async () => {
+  await signedIn()
+  vi.mocked(fetch).mockResolvedValueOnce(json({checkedAt:'2026-11-14T00:00:00Z',scope:'latest_20_per_source',hasEarlierRecords:false,incompleteSources:[],counts:{records:1,attention:1,review:0},items:[{id:'s',source:'search',sourceId:'r',stage:2,at:'2026-11-14T00:00:00Z',title:'재확인할 키워드',label:'검색 확인 미완료',state:'attention',message:'확인 필요',target:'discovery'}]}))
+  click('진행 기록 불러오기')
+  await screen.findByText('재확인할 키워드')
+  vi.mocked(fetch).mockResolvedValueOnce(json({configured:false,runs:[]}))
+  click('해당 단계 열기')
+  await screen.findByText('검색 API 미연결 · 실제 검색은 아직 실행할 수 없습니다.')
+  expect(screen.getByRole('button',{name:'키워드 발굴',exact:true}).getAttribute('aria-current')).toBe('page')
+  expect(vi.mocked(fetch).mock.calls.some(call => ['POST','PUT'].includes(call[1]?.method || 'GET'))).toBe(false)
+})
