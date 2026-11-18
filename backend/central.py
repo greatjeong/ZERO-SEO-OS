@@ -330,6 +330,11 @@ def create_app(settings=None):
         session(request, write=True)
         return await run_in_threadpool(bank.attach, key, await read_json(request))
 
+    @app.post('/api/keyword-bank/{key}/volume')
+    async def record_keyword_volume(key: str, request: Request):
+        session(request, write=True)
+        return await run_in_threadpool(bank.volume, key, await read_json(request))
+
     @app.post('/api/keyword-bank/{key}/review')
     async def review_keyword(key: str, request: Request):
         session(request, write=True)

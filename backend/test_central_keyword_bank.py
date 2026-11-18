@@ -49,11 +49,12 @@ class BankTests(unittest.TestCase):
 
     def active(self):
         row=self.checked()
+        row=self.bank.volume(row['id'],{'revision':row['revision'],'naverMonthly':1200,'googleMonthly':None,'source':'수동 테스트 확인값'})
         return self.bank.review(row['id'],{'revision':row['revision'],'runId':row['latestRunId'],'decision':'active','reason':'출처 확인 후 선택'})
 
     def test_unreviewed_candidates_are_not_active_and_need_both_engines(self):
         row=self.stage()
-        self.assertEqual(row['status'],'pending');self.assertIsNone(row['searchVolume'])
+        self.assertEqual(row['status'],'excluded');self.assertIsNone(row['searchVolume'])
         with self.assertRaises(HTTPException):self.bank.review(row['id'],{'revision':row['revision'],'runId':None,'decision':'active','reason':'선택'})
         self.provider.fail='google'
         row=self.bank.check(row['id'],{'revision':row['revision']})
@@ -85,11 +86,11 @@ class BankTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as error:self.bank.check(row['id'],{'revision':1})
         self.assertEqual(error.exception.status_code,409)
 
-    def test_monthly_failed_check_preserves_active_original_and_regular_date(self):
+    def test_monthly_failed_check_excludes_preserves_original_and_regular_date(self):
         row=self.active();before=copy.deepcopy(row)
         self.provider.fail='google'
         row=self.bank.check(row['id'],{'revision':row['revision']})
-        self.assertEqual(row['status'],'active');self.assertEqual(row['sources'],before['sources'])
+        self.assertEqual(row['status'],'excluded');self.assertEqual(row['sources'],before['sources'])
         self.assertEqual(row['checkedAt'],before['checkedAt']);self.assertEqual(row['nextCheckAt'],before['nextCheckAt'])
         self.assertTrue(row['retryAt']);self.assertTrue(row['reviewRequired'])
         with self.assertRaises(HTTPException):self.bank.handoff(row['id'],{'revision':row['revision'],'slot':'A-1'})
@@ -118,7 +119,7 @@ class BankTests(unittest.TestCase):
         row=self.active();self.bank.handoff(row['id'],{'revision':row['revision'],'slot':'A-1'})
         self.assertTrue(self.bank.queue()[0]['eligible'])
         row=self.bank.review(row['id'],{'revision':row['revision'],'runId':row['latestRunId'],'decision':'excluded','reason':'조건 변경'})
-        self.assertFalse(self.bank.queue()[0]['eligible']);self.assertEqual(len(self.bank.history(row['id'])),5)
+        self.assertFalse(self.bank.queue()[0]['eligible']);self.assertEqual(len(self.bank.history(row['id'])),6)
         row=self.bank.review(row['id'],{'revision':row['revision'],'runId':row['latestRunId'],'decision':'active','reason':'재검토'})
         data=copy.deepcopy(base.DATA);data['sites']['A-1']['url']='https://changed.example';self.store.save(1,data)
         self.assertFalse(self.bank.queue()[0]['eligible'])
@@ -136,7 +137,7 @@ class BankTests(unittest.TestCase):
         other=KeywordBank(Store(Path(self.tmp.name)),self.discovery)
         export=other.export()
         self.assertEqual(export['keywords'][0]['id'],row['id']);self.assertEqual(len(export['preparations']),1)
-        self.assertEqual(len(export['events']),4);self.assertIsNone(other.list()['nextOffset'])
+        self.assertEqual(len(export['events']),5);self.assertIsNone(other.list()['nextOffset'])
         self.assertEqual(self.store.current()['data'],base.DATA)
 
     def test_all_new_routes_require_session_and_writes_require_csrf(self):
@@ -144,7 +145,7 @@ class BankTests(unittest.TestCase):
         with TestClient(create_app(cfg),base_url=base.ORIGIN) as client:
             for path in ['/api/keyword-bank','/api/keyword-bank/export','/api/article-preparations','/api/keyword-bank/x/history']:
                 self.assertEqual(client.get(path).status_code,401)
-            paths=['/api/keyword-bank/stage','/api/keyword-bank/x/check','/api/keyword-bank/x/review','/api/keyword-bank/x/evidence','/api/keyword-bank/x/handoff','/api/feed-collections/from-discovery']
+            paths=['/api/keyword-bank/stage','/api/keyword-bank/x/check','/api/keyword-bank/x/volume','/api/keyword-bank/x/review','/api/keyword-bank/x/evidence','/api/keyword-bank/x/handoff','/api/feed-collections/from-discovery']
             for path in paths:self.assertEqual(client.post(path,json={}).status_code,401)
             client.post('/api/login',json={'password':base.PASSWORD},headers={'Origin':base.ORIGIN})
             for path in paths:self.assertEqual(client.post(path,json={},headers={'Origin':base.ORIGIN}).status_code,403)
@@ -163,8 +164,31 @@ class BankTests(unittest.TestCase):
                     feed=client.post('/api/feed-collections/from-discovery',json={'runId':run['id'],'resultId':result['id']},headers=headers).json()
                 row=client.post('/api/keyword-bank/stage',json={'collectionId':feed['id'],'selections':[{'index':0,'keyword':KW}]},headers=headers).json()['keywords'][0]
                 row=client.post('/api/keyword-bank/'+row['id']+'/check',json={'revision':row['revision']},headers=headers).json()
+            row=client.post('/api/keyword-bank/'+row['id']+'/volume',json={'revision':row['revision'],'naverMonthly':500,'googleMonthly':0,'source':'수동 테스트 확인값'},headers=headers).json()
             row=client.post('/api/keyword-bank/'+row['id']+'/review',json={'revision':row['revision'],'runId':row['latestRunId'],'decision':'active','reason':'검토 완료'},headers=headers).json()
             response=client.post('/api/keyword-bank/'+row['id']+'/handoff',json={'revision':row['revision'],'slot':'A-1'},headers=headers)
             self.assertEqual(response.status_code,200)
             self.assertEqual(client.get('/api/article-preparations').json()['preparations'][0]['keyword'],KW)
             self.assertEqual(client.get('/api/keyword-bank').json()['keywords'][0]['status'],'active')
+
+class SelectionGateTests(unittest.TestCase):
+    setUp = BankTests.setUp
+    stage = BankTests.stage
+    checked = BankTests.checked
+    active = BankTests.active
+    def test_active_keyword_loses_volume_is_excluded_and_existing_queue_is_blocked(self):
+        row=self.active();self.bank.handoff(row['id'],{'revision':row['revision'],'slot':'A-1'})
+        for n in (None,499):
+            row=self.bank.volume(row['id'],{'revision':row['revision'],'naverMonthly':n,'googleMonthly':100000,'source':'재확인 테스트'})
+            self.assertEqual(row['status'],'excluded');self.assertFalse(self.bank.queue()[0]['eligible'])
+            with self.assertRaises(HTTPException):self.bank.handoff(row['id'],{'revision':row['revision'],'slot':'A-1'})
+        self.assertTrue(row['sources']);self.assertEqual(len(self.bank.queue()),1)
+    def test_unconfigured_provider_excludes_previous_active_but_preserves_evidence(self):
+        row=self.active();old=row['evidence'];self.discovery.provider=None
+        row=self.bank.check(row['id'],{'revision':row['revision']})
+        self.assertEqual(row['status'],'excluded');self.assertEqual(row['evidence'],old);self.assertFalse(row['selection']['eligible'])
+    def test_volume_rejects_invalid_values_without_mutation(self):
+        row=self.checked()
+        for n in (True,-1,1.5,'500'):
+            with self.assertRaises(HTTPException):self.bank.volume(row['id'],{'revision':row['revision'],'naverMonthly':n,'googleMonthly':None,'source':'테스트'})
+        self.assertEqual(self.bank.get(row['id'])['revision'],row['revision'])

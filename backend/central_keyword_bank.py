@@ -11,6 +11,7 @@ from sqlalchemy import Column, Table, Text, insert, select, update
 from central_store import metadata, workspaces
 from central_feeds import collections
 from central_discovery import stamp
+from keyword_rules import evaluate, enforce
 from server import normalize_url, VerificationError
 
 keywords = Table('keyword_bank', metadata, Column('id', Text, primary_key=True), Column('record', Text, nullable=False))
@@ -47,7 +48,7 @@ class KeywordBank:
     def read(self, db, key):
         raw = db.execute(select(keywords.c.record).where(keywords.c.id == key)).scalar_one_or_none()
         if raw is None: raise HTTPException(404, '키워드를 찾지 못했습니다.')
-        return json.loads(raw)
+        return enforce(json.loads(raw))
 
     def get(self, key):
         with self.store.engine.connect() as db: return self.read(db, key)
@@ -69,7 +70,7 @@ class KeywordBank:
         if type(offset) is not int or offset < 0: raise HTTPException(400, '목록 위치 오류입니다.')
         with self.store.engine.connect() as db:
             rows = db.execute(select(keywords.c.record).order_by(keywords.c.id).offset(offset).limit(101)).scalars().all()
-        return {'keywords': [json.loads(r) for r in rows[:100]], 'nextOffset': offset + 100 if len(rows) > 100 else None}
+        return {'keywords': [enforce(json.loads(r)) for r in rows[:100]], 'nextOffset': offset + 100 if len(rows) > 100 else None}
 
     def history(self, key):
         self.get(key)
@@ -105,13 +106,14 @@ class KeywordBank:
                         row['sources'].append(provenance)
                         self.write(db, row, 'source_added', {'collectionId': source['id']})
                 else:
-                    row = {'id': key, 'keyword': text, 'revision': 1, 'status': 'pending', 'createdAt': stamp(), 'updatedAt': stamp(),
+                    row = {'id': key, 'keyword': text, 'revision': 1, 'status': 'excluded', 'createdAt': stamp(), 'updatedAt': stamp(),
                            'sources': [provenance], 'latestRunId': None, 'verification': 'not_checked', 'checkedAt': None,
-                           'nextCheckAt': None, 'retryAt': None, 'searchVolume': None, 'selectionMode': 'manual_no_volume_rule', 'reviewRequired': True, 'evidence': None}
+                           'nextCheckAt': next_month(stamp()), 'retryAt': None, 'searchVolume': None, 'selectionMode': 'manual_no_volume_rule', 'reviewRequired': True, 'evidence': None}
+                    enforce(row)
                     db.execute(insert(keywords).values(id=key, record=json.dumps(row, ensure_ascii=False)))
                     self.event(db, key, 'candidate_staged', {'collectionId': source['id']})
                 result.append(row)
-            return {'keywords': result, 'note': '검토 대기이며 활성 DB 등록이 아닙니다.'}
+            return {'keywords': result, 'note': '조건 미확인 후보는 사용 목록에서 제외했습니다. 원본·출처는 보관합니다.'}
 
     def attach(self, key, payload):
         fields(payload, ('revision', 'runId'))
@@ -132,13 +134,25 @@ class KeywordBank:
             if complete:
                 row['checkedAt'] = stamp()
                 if row['status'] == 'active' and present: row['nextCheckAt'] = next_month(row['checkedAt'])
+            enforce(row, promote=True)
+            if complete: row['nextCheckAt'] = next_month(row['checkedAt'])
             self.write(db, row, 'search_checked' if complete else 'search_unverified', {'runId': run['id']})
             return row
 
     def check(self, key, payload):
         fields(payload, ('revision',))
         row = self.get(key); self.version(row, payload['revision'])
-        run = self.discovery.create({'keyword': row['keyword']})
+        try:
+            run = self.discovery.create({'keyword': row['keyword']})
+        except HTTPException as error:
+            with self.store.engine.begin() as db:
+                self.store.lock(db, 901002)
+                row = self.read(db, key); self.version(row, payload['revision'])
+                row['verification'] = 'incomplete'
+                row['retryAt'] = (datetime.fromisoformat(stamp()) + timedelta(days=1)).isoformat()
+                enforce(row)
+                self.write(db, row, 'search_unverified', {'httpStatus': error.status_code})
+                return row
         return self.attach(key, {'revision': payload['revision'], 'runId': run['id']})
 
     def review(self, key, payload):
@@ -148,13 +162,34 @@ class KeywordBank:
         with self.store.engine.begin() as db:
             self.store.lock(db, 901002)
             row = self.read(db, key); self.version(row, payload['revision'])
-            if row['verification'] != 'both_retrieved' or not row['latestRunId'] or payload['runId'] != row['latestRunId']:
-                raise HTTPException(409, '네이버·구글 최신 검색을 모두 확인한 뒤 선별하세요.')
-            if payload['decision'] == 'active' and not any(e.get('targetPresence') == 'present' for e in row['evidence']['engines'].values()):
-                raise HTTPException(409, '대상 블로그 유형이 아직 확인되지 않았습니다. 유형 확인 후 검색 근거를 다시 연결하세요.')
+            if payload['decision'] == 'active':
+                candidate = dict(row, manualExclusion=False)
+                result = evaluate(candidate)
+                if payload['runId'] != row['latestRunId'] or not result['eligible']:
+                    raise HTTPException(409, '사용 조건 미충족: ' + ' / '.join(result['reasons']))
+            row['manualExclusion'] = payload['decision'] == 'excluded'
             row['status'] = payload['decision']
-            row['nextCheckAt'] = next_month(stamp()); row['retryAt'] = None; row['reviewRequired'] = False
-            self.write(db, row, 'manual_' + payload['decision'], {'reason': payload['reason'].strip(), 'runId': row['latestRunId'], 'searchVolume': None})
+            row['nextCheckAt'] = next_month(stamp()); row['retryAt'] = None; enforce(row, promote=True)
+            self.write(db, row, 'manual_' + payload['decision'], {'reason': payload['reason'].strip(), 'runId': row['latestRunId'], 'searchVolume': row.get('searchVolume')})
+            return row
+
+    def volume(self, key, payload):
+        fields(payload, ('revision', 'naverMonthly', 'googleMonthly', 'source'))
+        for field in ('naverMonthly', 'googleMonthly'):
+            value = payload[field]
+            if value is not None and (type(value) is not int or not 0 <= value <= 10**12):
+                raise HTTPException(400, '검색량은 0 이상의 정수 또는 미확인(null)으로 입력하세요.')
+        source = payload['source']
+        if not isinstance(source, str) or not 1 <= len(source.strip()) <= 500:
+            raise HTTPException(400, '검색량 확인 출처를 입력하세요.')
+        with self.store.engine.begin() as db:
+            self.store.lock(db, 901002)
+            row = self.read(db, key); self.version(row, payload['revision'])
+            row['searchVolume'] = {engine: {'monthly': payload[field], 'source': source.strip(), 'checkedAt': stamp(), 'method': 'owner_manual'}
+                                  for engine, field in (('naver', 'naverMonthly'), ('google', 'googleMonthly'))}
+            enforce(row, promote=True)
+            row['nextCheckAt'] = next_month(stamp())
+            self.write(db, row, 'volume_recorded', {'source': source.strip(), 'method': 'owner_manual', 'selection': row['selection']})
             return row
 
     def handoff(self, key, payload):
@@ -163,7 +198,7 @@ class KeywordBank:
         with self.store.engine.begin() as db:
             self.store.lock(db, 901002)
             row = self.read(db, key); self.version(row, payload['revision'])
-            if row['status'] != 'active' or row['verification'] != 'both_retrieved' or row.get('reviewRequired', True): raise HTTPException(409, '활성·양쪽 확인 완료 키워드만 연결할 수 있습니다.')
+            if row['status'] != 'active' or not evaluate(row)['eligible']: raise HTTPException(409, '활성·양쪽 확인 완료 키워드만 연결할 수 있습니다.')
             raw = db.execute(select(workspaces.c.data).order_by(workspaces.c.revision.desc()).limit(1)).scalar_one_or_none()
             if raw is None: raise HTTPException(409, '대상 워드프레스 사이트를 서버에 먼저 저장하세요.')
             site = json.loads(raw)['sites'][payload['slot']]
@@ -187,7 +222,7 @@ class KeywordBank:
             for raw in rows:
                 job = json.loads(raw); row = self.read(db, job['keywordId'])
                 url = sites.get(job['slot'], {}).get('url', '').rstrip('/')
-                job['eligible'] = row['status'] == 'active' and row['verification'] == 'both_retrieved' and not row.get('reviewRequired', True) and url == job['siteUrl']
+                job['eligible'] = row['status'] == 'active' and evaluate(row)['eligible'] and url == job['siteUrl']
                 result.append(job)
         return result
 
@@ -195,8 +230,8 @@ class KeywordBank:
         # Deliberately bounded; scheduled runner and owner screen use the same operation.
         if type(limit) is not int or not 1 <= limit <= 5: raise HTTPException(400, '검사 묶음은 1~5개입니다.')
         now = stamp()
-        with self.store.engine.connect() as db: rows = [json.loads(r) for r in db.execute(select(keywords.c.record)).scalars()]
-        due = [r for r in rows if r['status'] == 'active' and r['nextCheckAt'] and ((r['retryAt'] and r['retryAt'] <= now) or (not r['retryAt'] and r['nextCheckAt'] <= now))]
+        with self.store.engine.connect() as db: rows = [enforce(json.loads(r)) for r in db.execute(select(keywords.c.record)).scalars()]
+        due = [r for r in rows if r['status'] in ('active', 'excluded') and r['nextCheckAt'] and ((r['retryAt'] and r['retryAt'] <= now) or (not r['retryAt'] and r['nextCheckAt'] <= now))]
         result = []
         for row in sorted(due, key=lambda r: r['retryAt'] or r['nextCheckAt'])[:limit]:
             try: result.append({'id': row['id'], 'record': self.check(row['id'], {'revision': row['revision']})})
@@ -206,7 +241,7 @@ class KeywordBank:
     def export(self):
         with self.store.engine.begin() as db:
             self.store.lock(db, 901002)
-            rows = [json.loads(r) for r in db.execute(select(keywords.c.record)).scalars()]
+            rows = [enforce(json.loads(r)) for r in db.execute(select(keywords.c.record)).scalars()]
             history = [{'id': r['id'], 'keywordId': r['keyword_id'], 'at': r['at'], **json.loads(r['record'])} for r in db.execute(select(events)).mappings()]
             jobs = [json.loads(r) for r in db.execute(select(preparations.c.record)).scalars()]
         return {'format': 'zero-keyword-bank-export', 'version': 1, 'exportedAt': stamp(), 'keywords': rows, 'events': history, 'preparations': jobs}
