@@ -55,6 +55,8 @@ class Settings:
 
     @classmethod
     def from_env(cls):
+        from central_runtime_diagnostics import runtime_summary
+        print(runtime_summary(os.environ), flush=True)
         directory = os.environ.get('ZERO_CENTRAL_DATA_DIR')
         database = os.environ.get('DATABASE_URL')
         if not database and not directory:
