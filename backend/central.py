@@ -120,6 +120,8 @@ def create_app(settings=None):
     bank = KeywordBank(store, discovery)
     from central_authoring import Authoring
     authoring = Authoring(store, bank)
+    from central_hub import Hub
+    hub = Hub(store)
     auth_revision = hashlib.sha256(cfg.owner_hash.encode()).hexdigest()
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
@@ -165,6 +167,16 @@ def create_app(settings=None):
             if not hmac.compare_digest(request.headers.get('x-csrf-token', '').encode(), row['csrf'].encode()):
                 raise HTTPException(403, '보안 확인이 만료됐습니다. 다시 로그인하세요.')
         return row
+
+    @app.get('/api/hub/{kind}')
+    def read_hub(kind: str, request: Request):
+        session(request)
+        return hub.get(kind)
+
+    @app.put('/api/hub/{kind}')
+    async def save_hub(kind: str, request: Request):
+        session(request, write=True)
+        return await run_in_threadpool(hub.save, kind, await read_json(request))
 
     @app.get('/api/health')
     def health():

@@ -148,14 +148,14 @@ test('draft readback success is removed when the next check fails', async () => 
   expect(screen.queryByText(/초안 확인 완료 · 글 ID 900/)).toBeNull()
 })
 
-test('four menu shell preserves unsaved site inputs across page changes', async () => {
+test('unified menu shell preserves unsaved site inputs across page changes', async () => {
   await signedIn()
   fireEvent.change(screen.getByLabelText('사이트 이름'), { target: { value: '수정 중인 이름' } })
   click('PBN 세팅')
-  expect(screen.getByRole('heading', { name: 'PBN 세팅 · 준비 중' })).toBeTruthy()
+  expect(screen.getByRole('heading', { name: 'PBN 세팅', exact: true, level: 2 })).toBeTruthy()
   expect(screen.queryByRole('button', { name: '인증정보 암호화 저장' })).toBeNull()
   click('백링크 세팅')
-  expect(screen.getByRole('heading', { name: '백링크 세팅 · 준비 중' })).toBeTruthy()
+  expect(screen.getByRole('heading', { name: '백링크 세팅', exact: true, level: 2 })).toBeTruthy()
   click('통합 관리')
   expect((screen.getByLabelText('사이트 이름') as HTMLInputElement).value).toBe('수정 중인 이름')
   expect(screen.getByRole('button', { name: '변경 사항 서버 저장' }).hasAttribute('disabled')).toBe(false)
