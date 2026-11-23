@@ -1,0 +1,16 @@
+.git
+**/node_modules
+**/dist
+**/__pycache__
+**/.state
+**/.central-state
+**/.env
+**/.env.*
+**/*.sqlite*
+**/*.db
+**/*.pem
+**/*.key
+**/*.log
+upload
+docs
+wordpress
