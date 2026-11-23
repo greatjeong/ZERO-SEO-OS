@@ -39,3 +39,31 @@ test('approved dashboard retains hero, seven workspaces and twelve stage cards w
  expect((screen.getByRole('checkbox',{name:'도메인 구매 및 등록 확인 완료 여부'}) as HTMLInputElement).checked).toBe(true)
  expect(api).toHaveBeenCalledExactlyOnceWith('hub/progress')
 })
+test('complete action persists latest checks and memo and restores them after a fresh mount',async()=>{
+ let server={revision:0,data:{} as Record<string,unknown>,updatedAt:null as string|null}
+ const api=vi.fn(async(_path:string,method?:string,body?:any)=>{if(method==='PUT'){server={revision:server.revision+1,data:structuredClone(body.data),updatedAt:'2026-11-23T11:00:00Z'}}return structuredClone(server)})
+ const props={api,navigate:vi.fn(),onDirty:vi.fn()}
+ const r=render(<CentralHub view="dashboard" {...props}/>);await screen.findByText('서버 기록을 불러왔습니다.')
+ fireEvent.click(screen.getByRole('button',{name:'도메인 구매 및 등록 확인 실습 가이드 열기'}))
+ fireEvent.change(screen.getByLabelText('실습 메모 · 비밀번호를 적지 마세요'),{target:{value:'새로고침 후 남아야 하는 메모'}})
+ const g=data.stages[0].items[0];for(const t of g.verify)fireEvent.click(screen.getByLabelText(t))
+ fireEvent.click(screen.getByRole('button',{name:'확인하고 완료하기'}));await screen.findByText('서버 저장 완료 · 재조회로 체크와 메모를 확인했습니다.')
+ expect(api.mock.calls.map(c=>c[1]??'GET')).toEqual(['GET','PUT','GET'])
+ expect(props.onDirty).toHaveBeenLastCalledWith(false)
+ r.unmount();render(<CentralHub view="dashboard" {...props}/>);await screen.findByText('서버 기록을 불러왔습니다.')
+ fireEvent.click(screen.getByRole('button',{name:'도메인 구매 및 등록 확인 실습 가이드 열기'}))
+ expect((screen.getByLabelText('실습 메모 · 비밀번호를 적지 마세요') as HTMLTextAreaElement).value).toBe('새로고침 후 남아야 하는 메모')
+ for(const t of g.verify)expect((screen.getByLabelText(t) as HTMLInputElement).checked).toBe(true)
+ expect((screen.getByLabelText('진행 상태') as HTMLSelectElement).value).toBe('done')
+})
+test('manual save cannot report success when the server readback loses the submitted memo',async()=>{
+ const api=vi.fn().mockResolvedValueOnce({revision:0,data:{},updatedAt:null}).mockResolvedValueOnce({revision:1,data:{},updatedAt:null}).mockResolvedValueOnce({revision:0,data:{},updatedAt:null})
+ const dirty=vi.fn();render(<CentralHub view="guides" api={api} navigate={vi.fn()} onDirty={dirty}/>);
+ fireEvent.click(screen.getByRole('button',{name:'도메인 구매 및 등록 확인 실습 가이드 열기'}))
+ fireEvent.click(screen.getAllByRole('button',{name:'서버 기록 불러오기'})[0]);await screen.findByText('서버 기록을 불러왔습니다.')
+ fireEvent.change(screen.getByLabelText('실습 메모 · 비밀번호를 적지 마세요'),{target:{value:'확인 실패해도 보존'}})
+ fireEvent.click(screen.getAllByRole('button',{name:'기록 서버 저장'})[0]);await screen.findByText(/서버 재조회 결과가 입력과 다릅니다/)
+ expect(screen.queryByText('서버 저장 완료 · 재조회로 체크와 메모를 확인했습니다.')).toBeNull()
+ expect((screen.getByLabelText('실습 메모 · 비밀번호를 적지 마세요') as HTMLTextAreaElement).value).toBe('확인 실패해도 보존')
+ expect(dirty).toHaveBeenLastCalledWith(true)
+})
