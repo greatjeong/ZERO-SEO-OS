@@ -4,11 +4,11 @@ import CentralApp from '../src/CentralApp'
 
 const data = { format: 'zero-seo-os-backup', version: 2, exportedAt: '2026-11-13', sites: { 'A-1': { name: '서버 사이트', url: 'https://example.com' }, 'A-2': { name: '', url: '' } }, keywordsBySite: { 'A-1': ['기존 키워드'], 'A-2': ['분리 키워드'] }, jobs: [] }
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status })
-const click = (name: string) => fireEvent.click(screen.getByRole('button', { name, exact: true }))
-function signedIn() {
-  vi.mocked(fetch).mockResolvedValueOnce(json({ authenticated: true, csrf: 'test-csrf' })).mockResolvedValueOnce(json({ revision: 1, data: structuredClone(data) }))
+const click = (name: string) => {const nav=screen.queryAllByRole('link',{name,exact:true}).find(e=>e.hasAttribute('aria-label'));fireEvent.click(nav??screen.getByRole('button', { name, exact: true }))}
+async function signedIn() {
+  vi.mocked(fetch).mockResolvedValueOnce(json({ authenticated: true, csrf: 'test-csrf' })).mockResolvedValueOnce(json({ revision: 1, data: structuredClone(data) })).mockResolvedValueOnce(json({revision:0,data:{},updatedAt:null}))
   render(<CentralApp />)
-  return screen.findByText('기존 키워드', { exact: true })
+  await screen.findByText('기존 키워드', { exact: true });await waitFor(()=>expect(fetch).toHaveBeenCalledTimes(3));click('사이트 연결·세팅')
 }
 function add(value: string) { fireEvent.change(screen.getByLabelText('등록할 키워드'), { target: { value } }); click('키워드 등록') }
 beforeEach(() => { vi.stubGlobal('fetch', vi.fn()); localStorage.clear() })
@@ -65,7 +65,7 @@ test('conflict never replaces unsaved edits or automatically retries', async () 
   vi.mocked(fetch).mockResolvedValueOnce(json({ message: '다른 창에서 먼저 저장했습니다.' }, 409))
   click('변경 사항 서버 저장'); await screen.findByText('다른 창에서 먼저 저장했습니다.', { exact: true })
   expect(screen.getByText('충돌 변경', { exact: true })).toBeTruthy()
-  expect(vi.mocked(fetch).mock.calls.filter(call => call[0] !== '/api/discovery')).toHaveLength(3)
+  expect(vi.mocked(fetch).mock.calls.filter(call => call[0] !== '/api/discovery' && call[0] !== '/api/hub/progress')).toHaveLength(3)
 })
 
 test('backup import preview cancellation never writes', async () => {
@@ -76,7 +76,7 @@ test('backup import preview cancellation never writes', async () => {
   Object.defineProperty(file, 'text', { value: async () => JSON.stringify({ ...data, version: 1 }) })
   fireEvent.change(screen.getByLabelText('v1/v2 JSON 가져오기'), { target: { files: [file] } })
   await waitFor(() => expect(window.confirm).toHaveBeenCalled())
-  expect(vi.mocked(fetch).mock.calls.filter(call => call[0] !== '/api/discovery')).toHaveLength(3)
+  expect(vi.mocked(fetch).mock.calls.filter(call => call[0] !== '/api/discovery' && call[0] !== '/api/hub/progress')).toHaveLength(3)
   expect(vi.mocked(fetch).mock.calls.at(-1)![0]).toBe('/api/import/preview')
   expect(screen.getByText('기존 키워드', { exact: true })).toBeTruthy()
 })
@@ -84,8 +84,8 @@ test('backup import preview cancellation never writes', async () => {
 test('missing workspace is not silently initialized', async () => {
   vi.mocked(fetch).mockResolvedValueOnce(json({ authenticated: true, csrf: 'csrf' })).mockResolvedValueOnce(json({ revision: 0, data: null }))
   render(<CentralApp />)
-  await screen.findByRole('heading', { name: '서버 작업 공간이 비어 있습니다' })
-  expect(vi.mocked(fetch).mock.calls.filter(call => call[0] !== '/api/discovery')).toHaveLength(2)
+  await screen.findByRole('link',{name:'사이트 연결·세팅'});click('사이트 연결·세팅');await screen.findByRole('heading', { name: '서버 작업 공간이 비어 있습니다' })
+  expect(vi.mocked(fetch).mock.calls.filter(call => call[0] !== '/api/discovery' && call[0] !== '/api/hub/progress')).toHaveLength(2)
   expect(screen.getByRole('button', { name: '빈 작업 공간으로 시작' })).toBeTruthy()
 })
 
@@ -156,7 +156,7 @@ test('unified menu shell preserves unsaved site inputs across page changes', asy
   expect(screen.queryByRole('button', { name: '인증정보 암호화 저장' })).toBeNull()
   click('백링크 세팅')
   expect(screen.getByRole('heading', { name: '백링크 세팅', exact: true, level: 2 })).toBeTruthy()
-  click('통합 관리')
+  click('사이트 연결·세팅')
   expect((screen.getByLabelText('사이트 이름') as HTMLInputElement).value).toBe('수정 중인 이름')
   expect(screen.getByRole('button', { name: '변경 사항 서버 저장' }).hasAttribute('disabled')).toBe(false)
   expect(vi.mocked(fetch).mock.calls.some(call => ['POST','PUT'].includes(call[1]?.method || 'GET'))).toBe(false)
@@ -177,7 +177,7 @@ test('keyword workspace mounts once and retains entered seed across navigation',
 
 test('preparation summary is unknown until fetched and does not imply generated articles', async () => {
   await signedIn()
-  expect(screen.getByText('미조회')).toBeTruthy()
+  click('원본 글 작성');expect(screen.getByText('작성 준비 기록을 아직 조회하지 않았습니다.')).toBeTruthy()
   vi.mocked(fetch).mockResolvedValueOnce(json({ preparations: [{ id:'prep',keyword:'준비 키워드',slot:'A-1',siteUrl:'https://example.com',eligible:false,articleGenerated:false }] }))
   click('작성 준비 목록 불러오기')
   await screen.findByText('준비 키워드', { exact: true })
@@ -185,15 +185,15 @@ test('preparation summary is unknown until fetched and does not imply generated 
   expect(screen.queryByText('미조회')).toBeNull()
 })
 
-test('collapsed and mobile navigation retain accessible names and close after selection', async () => {
+test('approved sidebar and mobile navigation retain accessible names and close after selection', async () => {
   await signedIn()
-  click('메뉴 접기')
-  expect(screen.getByRole('button', { name: '통합 관리', exact: true }).getAttribute('aria-current')).toBe('page')
+  click('통합 관리');expect(screen.getByText('AUTOMATION STUDIO')).toBeTruthy();expect(screen.getByText('12-STEP JOURNEY')).toBeTruthy()
+  expect(screen.getByRole('link', { name: '통합 관리', exact: true }).getAttribute('aria-current')).toBe('page')
   click('모바일 메뉴 열기')
   expect(screen.getByRole('button', { name: '모바일 메뉴 닫기' }).getAttribute('aria-expanded')).toBe('true')
   click('PBN 세팅')
   expect(screen.getByRole('button', { name: '모바일 메뉴 열기' }).getAttribute('aria-expanded')).toBe('false')
-  expect(screen.getByRole('button', { name: 'PBN 세팅', exact: true }).getAttribute('aria-current')).toBe('page')
+  expect(screen.getByRole('link', { name: 'PBN 세팅', exact: true }).getAttribute('aria-current')).toBe('page')
 })
 
 test('keyword bank preparation records appear in dashboard without a duplicate preparation section', async () => {
@@ -205,7 +205,7 @@ test('keyword bank preparation records appear in dashboard without a duplicate p
   click('키워드 DB·작성 준비 불러오기')
   await screen.findByText('서버의 키워드·원본 글 작성 준비 기록을 불러왔습니다.')
   expect(screen.queryByRole('heading',{name:'통합 관리 · 원본 글 작성 준비'})).toBeNull()
-  click('통합 관리')
+  click('원본 글 작성')
   expect(screen.getByText('연결한 준비 키워드')).toBeTruthy()
   expect(screen.getByText('키워드 발굴에서 조회한 최신 작성 준비 기록입니다.')).toBeTruthy()
   expect(screen.getByText('작성 준비',{exact:true})).toBeTruthy()
@@ -219,6 +219,6 @@ test('activity recovery navigation opens search workspace without executing sear
   vi.mocked(fetch).mockResolvedValueOnce(json({configured:false,runs:[]}))
   click('해당 단계 열기')
   await screen.findByText('검색 API 미연결 · 실제 검색은 아직 실행할 수 없습니다.')
-  expect(screen.getByRole('button',{name:'키워드 발굴',exact:true}).getAttribute('aria-current')).toBe('page')
+  expect(screen.getByRole('link',{name:'키워드 발굴',exact:true}).getAttribute('aria-current')).toBe('page')
   expect(vi.mocked(fetch).mock.calls.some(call => ['POST','PUT'].includes(call[1]?.method || 'GET'))).toBe(false)
 })

@@ -28,3 +28,14 @@ test('planning drafts survive navigation and never imply external execution',asy
  r.rerender(<CentralHub view="pbn" {...props}/>);expect((screen.getByLabelText('운영 메모') as HTMLTextAreaElement).value).toBe('보존할 설정')
  expect(api).toHaveBeenCalledTimes(1)
 })
+test('approved dashboard retains hero, seven workspaces and twelve stage cards with server progress',async()=>{
+ const api=vi.fn().mockResolvedValue({revision:2,data:{'S01-C01':{status:'done',note:'',verify:[true,true]}},updatedAt:null})
+ const props={api,navigate:vi.fn(),onDirty:vi.fn()};const r=render(<CentralHub view="dashboard" {...props}/>);
+ await screen.findByText('서버 기록을 불러왔습니다.')
+ expect(screen.getByRole('heading',{name:'좋은 흐름이에요.다음 한 걸음을 이어가세요.'})).toBeTruthy()
+ expect(r.container.querySelectorAll('.studio-card')).toHaveLength(7)
+ expect(r.container.querySelectorAll('.stage-card')).toHaveLength(12)
+ expect(r.container.querySelectorAll('.check-row')).toHaveLength(48)
+ expect((screen.getByRole('checkbox',{name:'도메인 구매 및 등록 확인 완료 여부'}) as HTMLInputElement).checked).toBe(true)
+ expect(api).toHaveBeenCalledExactlyOnceWith('hub/progress')
+})

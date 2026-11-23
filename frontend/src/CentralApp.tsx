@@ -4,6 +4,12 @@ import './central.css'
 import CentralAuthoring from './CentralAuthoring'
 import CentralHub from './CentralHub'
 import './hub.css'
+import './approved-style.css'
+import './approved-renew.css'
+import './approved-adapter.css'
+import Icon from './ApprovedIcon'
+import guideData from './guide-data.json'
+import {stageStatus,type GuideRecords} from './ApprovedRoadmap'
 import CentralActivity from './CentralActivity'
 import CentralKeywordBank, { type Preparation } from './CentralKeywordBank'
 import CentralFeeds from './CentralFeeds'
@@ -48,7 +54,9 @@ export default function CentralApp() {
   const [activityTarget, setActivityTarget] = useState<{ target: 'discovery' | 'feeds' | 'bank'; title: string } | null>(null)
   const [page, setPage] = useState<Page>('dashboard')
   const [keywordVisited, setKeywordVisited] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
+  const [recordPanel, setRecordPanel] = useState(false)
+  const [selectedStage,setSelectedStage]=useState<number|null>(null)
+  const [guideRecords,setGuideRecords]=useState<GuideRecords>({})
   const [mobileOpen, setMobileOpen] = useState(false)
   const [preparations, setPreparations] = useState<Preparation[] | null>(null)
   const [preparationsBusy, setPreparationsBusy] = useState(false)
@@ -174,30 +182,30 @@ export default function CentralApp() {
     finally { setPreparationsBusy(false) }
   }
 
-  return <div className={`central-shell ${phase === 'ready' ? 'central-layout' : 'central-auth'} ${collapsed ? 'nav-collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
-    {phase === 'ready' && <aside className="central-sidebar" aria-label="앱 메뉴"><div className="central-brand"><a href="https://growwithzero.com/" target="_blank" rel="noopener noreferrer" aria-label="ZERO 소개 홈페이지"><span className="central-brand-mark">Z</span><span className="central-brand-name">ZERO <b>SEO OS</b></span></a><button className="central-collapse" aria-label={collapsed ? '메뉴 펼치기' : '메뉴 접기'} onClick={() => setCollapsed(v => !v)}>☰</button></div><p className="central-nav-caption">WORKSPACE</p><nav aria-label="주 메뉴">{(['dashboard','guides','sites','keywords','writing','pbn','backlinks','index','stats'] as Page[]).map(id => <button key={id} aria-label={pages[id].title} aria-current={page === id ? 'page' : undefined} onClick={() => navigate(id)}><span className="central-nav-icon" aria-hidden="true">{pages[id].icon}</span><span className="central-nav-name">{pages[id].title}</span></button>)}</nav><div className="central-sidebar-bottom"><span className="central-private-dot" />본인용 비공개<span className="central-brand-name">임시 서비스명 · 메뉴 구성 변경 가능</span></div></aside>}
-    <div className="central-content">
-    <header className="central-topbar"><div className="central-topbar-title">{phase === 'ready' && <button className="central-mobile-toggle" aria-label={mobileOpen ? '모바일 메뉴 닫기' : '모바일 메뉴 열기'} aria-expanded={mobileOpen} onClick={() => setMobileOpen(v => !v)}>☰</button>}<div><p className="central-overline">ZERO WORKSPACE</p><h1>{phase === 'ready' ? pages[page].title : 'ZERO SEO OS'}</h1><p>{phase === 'ready' ? pages[page].caption : '본인용 비공개 중앙 작업 공간'}</p></div></div><div className="central-topbar-actions"><span className="central-owner-label">본인 계정</span><details className="central-help"><summary>사용법</summary><div><strong>준비와 실행을 나누어 진행하세요.</strong><p>통합 관리에서 사이트를 연결하고, 키워드 발굴에서 후보를 준비합니다. 활성 키워드를 통합 관리의 작성 준비로 연결할 수 있습니다.</p><p>실제 검색·수집은 서버와 API 연결 후 검증합니다. PBN·백링크 실행은 아직 준비 전입니다.</p></div></details></div></header>
-    <main className="central-workspace" id="central-workspace">
+  const title=page==='dashboard'?'나의 SEO 성장 로드맵':page==='guides'?'스스로 해내는 실습 가이드':pages[page].title
+  const navLink=(id:Page,icon:string)=><a key={id} href={`#${id}`} className={page===id?'active':''} aria-label={pages[id].title} aria-current={page===id?'page':undefined} onClick={e=>{e.preventDefault();setSelectedStage(null);navigate(id)}}><Icon name={icon}/>{pages[id].title}{id==='guides'&&<small>48</small>}{id==='keywords'&&<small>6단계</small>}</a>
+  return <div className={`approved-app ${phase==='ready'?'shell':'approved-auth'} ${mobileOpen?'mobile-open':''}`}>
+    {phase==='ready'&&<aside className="sidebar" aria-label="앱 메뉴"><a className="brand" href="#roadmap" onClick={e=>{e.preventDefault();navigate('dashboard')}}><span className="brand-mark">Z</span><span>ZERO <b>SEO OS</b><small>GROW WITH ZERO</small></span></a><div className="nav-label">WORKSPACE</div><nav className="nav" aria-label="주 메뉴">{navLink('dashboard','layout')}{navLink('guides','book')}</nav><div className="nav-label">AUTOMATION STUDIO</div><nav className="nav studio-nav">{([['sites','server'],['keywords','key'],['writing','sparkles'],['pbn','network'],['backlinks','link'],['index','search'],['stats','chart']] as [Page,string][]).map(([id,icon])=>navLink(id,icon))}</nav><div className="nav-label journey">12-STEP JOURNEY</div><div className="side-stages">{guideData.stages.map(s=><a key={s.id} href={`#stage-${s.id}`} className={`side-stage ${selectedStage===s.id?'selected':''}`} onClick={e=>{e.preventDefault();setSelectedStage(s.id);navigate('guides')}}><span className="num">{String(s.id).padStart(2,'0')}</span>{s.short}<span className={`side-dot ${stageStatus(guideRecords,s.id).status}`}/></a>)}</div><div className="side-bottom"><small>ZERO BUSINESS</small><p>전체를 보고,<br/>하나씩 실행합니다.</p><div>통합 앱 리뉴얼 2.0 <span>PRIVATE</span></div></div></aside>}
+    <div className="main-shell"><header className="topbar"><button className="mobile-menu" aria-label={mobileOpen?'모바일 메뉴 닫기':'모바일 메뉴 열기'} aria-expanded={mobileOpen} onClick={()=>setMobileOpen(v=>!v)}>☰</button><div>내 작업공간 <span>/</span><strong>{phase==='ready'?(page==='dashboard'?'실행 현황판':pages[page].title):'본인 로그인'}</strong></div><div className="top-actions"><a className="home-link" href="https://growwithzero.com/" target="_blank" rel="noopener noreferrer">소개 홈페이지 ↗</a><span className="privacy"><Icon name="lock"/>비공개</span><details className="approved-help"><summary className="help" aria-label="현황판 사용법">?</summary><div>12단계 가이드에서 실행·확인하고 기록을 서버에 저장하세요. 사이트와 키워드 작업실은 실제 서버 기능에 연결됩니다. PBN·백링크 자동 실행과 통계 측정은 연결 전입니다.</div></details><span className="avatar">Z</span></div></header><main id="central-workspace" tabIndex={-1}>
+    {phase==='ready'&&<><div className="page-heading"><div><div className="eyebrow">YOUR GROWTH, STEP BY STEP</div><h1>{title}<span>.</span></h1><p>{page==='dashboard'?'구축부터 유입과 수익화까지, 오늘도 한 걸음씩 나아가세요.':pages[page].caption}</p></div><button className="button" aria-expanded={recordPanel} onClick={()=>setRecordPanel(v=>!v)}><Icon name="download"/><span className="record-button-text">기록 관리</span></button></div><div className="app-scope"><strong>개인용 통합 작업공간</strong><span>진행 기록과 설정은 서버에 저장합니다. 검색·글 작성 작업실에서 연결 상태를 확인하세요. PBN·백링크 자동 실행과 통계 측정은 연결 전입니다.</span></div></>}
     {message && <p role="status" className="global-message">{message}</p>}
     {phase === 'checking' && <p role="status">로그인 상태 확인 중…</p>}
     {phase === 'login' && <section className="panel central-login"><h2>본인 로그인</h2><form onSubmit={event => { event.preventDefault(); void login() }}><label>서비스 비밀번호<input type="password" autoComplete="current-password" value={password} disabled={busy} onChange={event => setPassword(event.target.value)} required /></label><button disabled={busy} type="submit">로그인</button></form><p>워드프레스 앱 비밀번호가 아닌, 이 서비스의 본인 로그인 비밀번호입니다.</p></section>}
     {phase === 'ready' && <>
-      <section className="panel"><div className="backup-actions">
+      <section hidden={!recordPanel && page!=='sites' && page!=='writing'} className="panel central-shell approved-record-panel"><div className="backup-actions">
         <strong>{dirty ? '저장 전 변경 있음' : `서버 기준 버전 ${workspace.revision}`}</strong>
         <button disabled={busy || !data || !dirty} onClick={() => void run(async () => { if (data) await persist(data) })}>변경 사항 서버 저장</button>
         <button disabled={busy} onClick={() => void run(reload)}>서버 데이터 다시 불러오기</button>
         <button disabled={busy || authoringDirty || hubDirty} onClick={() => { setPassword(''); setPhase('login'); setMessage('서비스 비밀번호로 다시 로그인하세요. 작성 중인 변경은 유지됩니다.') }}>로그인 갱신</button>
         <button disabled={busy} onClick={() => void run(async () => { if ((dirty || authoringDirty || hubDirty) && !window.confirm('저장 전 변경을 버리고 로그아웃할까요?')) return; await api('logout', 'POST'); csrf.current = null; setWorkspace({ revision: 0, data: null }); setDirty(false); setSnapshots([]); setSelectedPreparation(null); setAuthoringDirty(false); setHubDirty(false); setPreparations(null); setActivityTarget(null); setKeywordVisited(false); setPage('dashboard'); setPhase('login'); setMessage('로그아웃했습니다.') })}>로그아웃</button>
       </div><p>다른 PC에서는 서버에 저장한 버전을 불러옵니다. 브라우저 로컬 데이터는 자동으로 가져오거나 지우지 않습니다.</p></section>
-      <CentralHub view={page} api={api} navigate={navigate} onDirty={setHubDirty} />
+      <CentralHub view={page} api={api} navigate={navigate} onDirty={setHubDirty} selectedStage={selectedStage} onStage={setSelectedStage} onProgress={setGuideRecords} />
+      <div className="central-shell approved-operations">
       {keywordVisited && <div hidden={page !== 'keywords'} aria-label="키워드 발굴 작업 공간" role="region"><div className="central-section-intro"><span>PREPARE</span><h2>찾고, 검토하고, 계속 쓸 키워드로.</h2><p>실제 서버 기능을 사용합니다. 검색·수집 API 미연결 시 실행되지 않습니다.</p></div><nav className="hub-keyword-steps" aria-label="키워드 발굴 6단계">{['발굴 시작점','1페이지 확인','후보 추출','조건별 선별','DB·재검증','원본 글 연결'].map((title,i)=><button key={title} aria-current={keywordStep===i?'step':undefined} onClick={()=>{setKeywordStep(i);document.getElementById(i<2?'central-discovery':i===2?'central-feeds':'central-bank')?.scrollIntoView?.({behavior:'smooth',block:'start'})}}><small>{String(i+1).padStart(2,'0')}</small><strong>{title}</strong></button>)}</nav><p>네이버 검색량 500~2,999 / 3,000~9,999 / 10,000 이상. 양쪽 조회 후 한쪽 이상 1페이지 티스토리·워드프레스 노출. 미확인·미달은 사용 목록 제외.</p>{activityTarget && <p role="status" className="global-message">기록에서 이동: {activityTarget.title} · 아래 {activityTarget.target === 'discovery' ? '검색 기록 다시 불러오기' : activityTarget.target === 'feeds' ? 'RSS 수집 기록 불러오기' : '키워드 DB·작성 준비 불러오기'}로 상세 근거를 확인하세요.</p>}<div id="central-discovery"><CentralDiscovery api={api} /></div><div id="central-feeds"><CentralFeeds api={api} /></div><div id="central-bank"><CentralKeywordBank api={api} showPreparations={false} onPreparationsChange={jobs => { setPreparations(jobs); setPreparationsMessage('키워드 발굴에서 조회한 최신 작성 준비 기록입니다.') }} /></div></div>}
-      <div hidden={!['dashboard','sites','writing'].includes(page)} role="region" aria-label="통합 관리 작업 공간">
-      <section hidden={page!=='dashboard'} className="central-overview"><div><span>WORKSPACE OVERVIEW</span><h2>연결하고 준비한 작업을 확인하세요.</h2><p>실행 전 확인이 필요한 상태를 구분해서 표시합니다.</p></div><button onClick={() => navigate('keywords')}>키워드 발굴로 이동 →</button></section>
-      <div hidden={page!=='dashboard'} className="central-stat-grid"><article><span>사이트 주소 입력</span><strong>{data ? Object.values(data.sites).filter(v => v.url).length : 0}<small> / 2</small></strong><p>{dirty ? '저장 전 변경 포함 · 인증 여부 별도' : '인증 여부는 실제 연결 확인 필요'}</p></article><article><span>기존 등록 키워드</span><strong>{data ? Object.values(data.keywordsBySite).reduce((sum, list) => sum + list.length, 0) : 0}</strong><p>기존 작업 공간 · 발굴 DB와 구분</p></article><article><span>원본 글 작성 준비</span><strong>{preparations === null ? '미조회' : preparations.length}</strong><p>{preparations === null ? '목록을 불러오면 표시됩니다.' : '불러온 기록 기준 · 실제 글 미생성'}</p></article></div>
+      <div hidden={!['sites','writing'].includes(page)} role="region" aria-label="통합 관리 작업 공간">
       <section hidden={page==='sites'} className="panel central-preparations"><div className="central-card-heading"><div><span className="central-overline">STEP 06</span><h2>원본 글 작성 준비</h2></div><button disabled={preparationsBusy} onClick={() => void loadPreparations()}>작성 준비 목록 불러오기</button></div><p role="status">{preparationsMessage}</p>{preparations === null ? <div className="central-empty">키워드 발굴에서 선택한 키워드를 이곳에 연결합니다.</div> : !preparations.length ? <div className="central-empty">연결된 작성 준비 기록이 없습니다.</div> : preparations.map(job => <div className="keyword-item" key={job.id}><strong>{job.keyword}</strong><span>{job.slot} · {job.siteUrl}</span><span className={`central-state ${job.eligible ? 'ready' : 'pending'}`}>{job.eligible ? '작성 준비' : '재검증·사이트 확인 필요'}</span><button disabled={!job.eligible} onClick={() => { if (selectedPreparation?.id !== job.id && authoringDirty && !window.confirm('현재 글의 미저장 편집을 버리고 다른 작업을 열까요?')) return; setSelectedPreparation(job);navigate('writing') }}>원본 글 작업 열기</button></div>)}<p>키워드 원본은 DB에 유지됩니다. 실제 AI 글 생성·저장·발행은 후속 기능입니다.</p></section>
       {selectedPreparation && <CentralAuthoring key={selectedPreparation.id} preparation={selectedPreparation} api={api} onDirtyChange={setAuthoringDirty} />}
-      <div hidden={page!=='dashboard'}><CentralActivity api={api} onOpen={(target, title) => { setActivityTarget({ target, title }); navigate('keywords') }} /></div>
+      <div hidden={page!=='sites'}><CentralActivity api={api} onOpen={(target, title) => { setActivityTarget({ target, title }); navigate('keywords') }} /></div>
       {!data && <section className="panel"><h2>서버 작업 공간이 비어 있습니다</h2><p>기존 데이터가 있으면 아래 JSON 가져오기를 먼저 이용하세요.</p><button disabled={busy} onClick={() => void run(async () => { if (window.confirm('기존 브라우저 데이터는 그대로 두고 빈 서버 작업 공간을 만들까요?')) await persist(emptyData()) })}>빈 작업 공간으로 시작</button></section>}
       {data && <fieldset hidden={page==='writing'} className="central-fields" disabled={busy}>
         <div className="site-switch">{(['A-1', 'A-2'] as const).map(slot => <button className={site === slot ? 'selected' : ''} key={slot} onClick={() => { setSite(slot); setKeyword('') }}>{slot} 사이트</button>)}</div>
@@ -214,8 +222,9 @@ export default function CentralApp() {
         {snapshots.map(snapshot => <button disabled={busy} key={snapshot.revision} onClick={() => void run(async () => { if (!window.confirm(`저장본 ${snapshot.revision}의 내용으로 새 버전을 만들까요? 저장 전 변경은 교체되며 이전 서버 저장본은 유지됩니다.`)) return; const old = checkedWorkspace(await api(`snapshots/${snapshot.revision}`)); if (old.data) await persist(old.data) })}>저장본 {snapshot.revision} 복원</button>)}
       </section>
       </div>
+      </div>
     </>}
-    </main>
+    <footer>ZERO BUSINESS · Grow with ZERO <span>본인용 비공개 · 서버 저장</span></footer></main>
     </div>
   </div>
 }
