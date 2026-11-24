@@ -122,6 +122,8 @@ def create_app(settings=None):
     authoring = Authoring(store, bank)
     from central_hub import Hub
     hub = Hub(store)
+    from central_workbench import Workbench
+    workbench = Workbench(store,bank,authoring)
     auth_revision = hashlib.sha256(cfg.owner_hash.encode()).hexdigest()
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.state.store = store
@@ -178,9 +180,87 @@ def create_app(settings=None):
         session(request, write=True)
         return await run_in_threadpool(hub.save, kind, await read_json(request))
 
+    @app.get('/api/workbench')
+    def read_workbench(request: Request):
+        session(request)
+        return workbench.snapshot()
+
+    @app.put('/api/workbench/config')
+    async def config_workbench(request: Request):
+        session(request,write=True)
+        return await run_in_threadpool(workbench.save_config,await read_json(request))
+
+    @app.post('/api/workbench/rehearse')
+    def rehearse_workbench(request: Request):
+        session(request,write=True)
+        return workbench.rehearse()
+
+    @app.post('/api/workbench/jobs')
+    async def enqueue_workbench(request: Request):
+        session(request,write=True)
+        return await run_in_threadpool(workbench.enqueue,await read_json(request))
+
+    @app.post('/api/workbench/jobs/{key}/action')
+    async def action_workbench(key: str,request: Request):
+        session(request,write=True)
+        from central_keyword_bank import fields
+        p=await read_json(request);fields(p,('revision','action'))
+        return await run_in_threadpool(workbench.jobs.action,key,p['revision'],p['action'])
+
+    @app.post('/api/workbench/jobs/{key}/rehearse')
+    def run_rehearsal_job(key: str,request: Request):
+        session(request,write=True)
+        from central_workbench import rehearsal
+        return workbench.jobs.run(key,lambda _:rehearsal(workbench.config()['data']['maxOutputChars']))
+
+    @app.post('/api/workbench/network')
+    async def create_network(request: Request):
+        session(request,write=True)
+        return await run_in_threadpool(workbench.network.create,await read_json(request))
+
+    @app.put('/api/workbench/network/{key}')
+    async def edit_network(key: str,request: Request):
+        session(request,write=True)
+        return await run_in_threadpool(workbench.network.edit,key,await read_json(request))
+
+    @app.get('/api/workbench/archive')
+    def export_archive(request: Request):
+        session(request)
+        return workbench.backups.export()
+
+    @app.post('/api/workbench/archive/preview')
+    async def preview_archive(request: Request):
+        session(request,write=True)
+        return await run_in_threadpool(workbench.backups.preview,await read_json(request))
+
+    @app.post('/api/workbench/archive/restore')
+    async def restore_archive(request: Request):
+        session(request,write=True)
+        return await run_in_threadpool(workbench.backups.restore,await read_json(request))
+
+    @app.get('/api/authoring/{key}/export')
+    def export_article(key: str,request: Request):
+        session(request)
+        return authoring.export(key)
+
+    @app.get('/api/authoring/{key}/compare/{revision}')
+    def compare_article(key: str,revision: int,request: Request):
+        session(request)
+        return authoring.compare(key,revision)
+
+    @app.get('/api/authoring/{key}/quality')
+    def quality_article(key: str,request: Request):
+        session(request)
+        return authoring.quality(key)
+
+    @app.post('/api/authoring/{key}/restore')
+    async def restore_article(key: str,request: Request):
+        session(request,write=True)
+        return await run_in_threadpool(authoring.restore,key,await read_json(request))
+
     @app.get('/api/health')
     def health():
-        return {'version': VERSION, 'mode': 'private-owner', 'database': store.kind, 'wordpressEnabled': vault is not None, 'searchEnabled': discovery.provider is not None}
+        return {'version': VERSION, 'mode': 'private-owner', 'database': store.kind, 'wordpressEnabled': vault is not None, 'searchEnabled': discovery.provider is not None, 'workbenchVersion':'six-independent-v1', 'externalAutomationEnabled':False}
 
     @app.post('/api/login')
     async def login(request: Request):

@@ -167,6 +167,8 @@ class Authoring:
         if not isinstance(result,dict) or not all(isinstance(result.get(k),str) for k in ('title','body')) or not 1<=len(result['title'])<=200 or not 1<=len(result['body'])<=50000:
             raise HTTPException(502,'AI 글 응답을 확인하지 못했습니다. 기존 글은 유지됩니다.')
         if not isinstance(result.get('unverifiedClaims', []), list): raise HTTPException(502,'AI 검토 항목 형식 미확인')
+        from central_adapters import generated
+        result=generated(result)
         return self.save(key,payload['revision'],{'draft':{'title':result['title'],'body':result['body']},'origin':'ai_draft','review':None,'status':'draft',
                          'unverifiedClaims':[v[:500] for v in result.get('unverifiedClaims',[]) if isinstance(v,str)][:50]},'ai_generated')
 
@@ -190,3 +192,30 @@ class Authoring:
         with self.store.engine.connect() as db:
             result=db.execute(select(versions.c.record).where(versions.c.document_id==key)).scalars().all()
         return sorted([json.loads(r) for r in result],key=lambda r:r['document']['revision'],reverse=True)
+
+    def export(self,key):
+        row=self.read(key)
+        return {'format':'zero-original-article','version':1,'document':row,'versions':self.history(key)}
+
+    def compare(self,key,revision):
+        import difflib
+        current=self.read(key)
+        old=next((r['document'] for r in self.history(key) if r['document']['revision']==revision),None)
+        if old is None:raise HTTPException(404,'이전 버전을 찾지 못했습니다.')
+        return {'currentRevision':current['revision'],'selectedRevision':revision,'title':old['draft']['title'],
+                'body':old['draft']['body'],'outline':old.get('outline',[]),
+                'diff':'\n'.join(difflib.unified_diff(current['draft']['body'].splitlines(),old['draft']['body'].splitlines(),fromfile='current',tofile='selected',lineterm=''))[:120000],
+                'changesCurrent':False}
+
+    def restore(self,key,payload):
+        fields(payload,('revision','sourceRevision'));self.context(key)
+        if type(payload['sourceRevision']) is not int:raise HTTPException(400,'복원할 버전을 확인하세요.')
+        old=next((r['document'] for r in self.history(key) if r['document']['revision']==payload['sourceRevision']),None)
+        if old is None:raise HTTPException(404,'복원할 버전이 없습니다.')
+        return self.save(key,payload['revision'],{'draft':old['draft'],'outline':old.get('outline',[]),
+            'origin':'restored_edit','review':None,'status':'draft','unverifiedClaims':old.get('unverifiedClaims',[]),
+            'restoredFrom':payload['sourceRevision']},'version_restored')
+
+    def quality(self,key):
+        from central_adapters import quality_report
+        return quality_report(self.read(key))

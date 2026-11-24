@@ -33,3 +33,16 @@ test('source research only uses selected stored IDs and preserves explicit resea
   expect(api).toHaveBeenLastCalledWith('authoring/p/research','POST',{revision:1,sourceIds:['s']})
   expect((screen.getByLabelText('원본 글 목차') as HTMLTextAreaElement).value).toBe('핵심 답변')
 })
+test('version compare never overwrites editor and restore failure retains saved document',async()=>{
+ const current={...doc,revision:3,draft:{title:'현재 제목',body:'현재 본문'}}
+ const old={...doc,revision:2,draft:{title:'이전 제목',body:'이전 본문'}}
+ const api=vi.fn().mockResolvedValueOnce(current).mockResolvedValueOnce({versions:[{event:'draft_saved',document:old}]}).mockResolvedValueOnce({currentRevision:3,selectedRevision:2,title:'이전 제목',diff:'-현재 본문\n+이전 본문'}).mockRejectedValueOnce(new Error('복원 충돌'))
+ render(<CentralAuthoring preparation={prep} api={api} onDirtyChange={vi.fn()}/>);
+ await screen.findByText('원본 글 작업 공간을 불러왔습니다. 참고 글부터 확인하세요.')
+ fireEvent.click(screen.getByRole('button',{name:'원본 글 이전 버전 보기'}));await screen.findByText('이전 저장본을 불러왔습니다. 현재 편집본은 교체하지 않았습니다.')
+ fireEvent.click(screen.getByText('버전 2 · draft_saved'));fireEvent.click(screen.getByRole('button',{name:'버전 2 비교·복원 준비'}));await screen.findByText('선택한 이전 버전과 서버 현재 버전을 비교했습니다. 아직 복원하지 않았습니다.')
+ expect((screen.getByLabelText('원본 글 본문') as HTMLTextAreaElement).value).toBe('현재 본문')
+ vi.spyOn(window,'confirm').mockReturnValue(true);fireEvent.click(screen.getByRole('button',{name:'비교 확인 후 원고 버전 복원'}));await screen.findByText('복원 충돌')
+ expect((screen.getByLabelText('원본 글 본문') as HTMLTextAreaElement).value).toBe('현재 본문')
+ expect(api).toHaveBeenLastCalledWith('authoring/p/restore','POST',{revision:3,sourceRevision:2});vi.restoreAllMocks()
+})

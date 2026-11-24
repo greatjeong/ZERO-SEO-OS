@@ -3,6 +3,7 @@ import './App.css'
 import './central.css'
 import CentralAuthoring from './CentralAuthoring'
 import CentralHub from './CentralHub'
+import CentralOperations from './CentralOperations'
 import './hub.css'
 import './approved-style.css'
 import './approved-renew.css'
@@ -49,6 +50,7 @@ function newJob(site: Slot, keyword: string): Job { return { id: crypto.randomUU
 export default function CentralApp() {
   const [selectedPreparation, setSelectedPreparation] = useState<Preparation | null>(null)
   const [hubDirty, setHubDirty] = useState(false)
+  const [operationsDirty,setOperationsDirty]=useState(false)
   const [keywordStep, setKeywordStep] = useState(0)
   const [authoringDirty, setAuthoringDirty] = useState(false)
   const [activityTarget, setActivityTarget] = useState<{ target: 'discovery' | 'feeds' | 'bank'; title: string } | null>(null)
@@ -99,11 +101,11 @@ export default function CentralApp() {
   }, [])
 
   useEffect(() => {
-    if (!dirty && !authoringDirty && !hubDirty) return
+    if (!dirty && !authoringDirty && !hubDirty && !operationsDirty) return
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
-  }, [dirty, authoringDirty, hubDirty])
+  }, [dirty, authoringDirty, hubDirty,operationsDirty])
 
   async function login() {
     setBusy(true); setMessage('')
@@ -196,8 +198,8 @@ export default function CentralApp() {
         <strong>{dirty ? '저장 전 변경 있음' : `서버 기준 버전 ${workspace.revision}`}</strong>
         <button disabled={busy || !data || !dirty} onClick={() => void run(async () => { if (data) await persist(data) })}>변경 사항 서버 저장</button>
         <button disabled={busy} onClick={() => void run(reload)}>서버 데이터 다시 불러오기</button>
-        <button disabled={busy || authoringDirty || hubDirty} onClick={() => { setPassword(''); setPhase('login'); setMessage('서비스 비밀번호로 다시 로그인하세요. 작성 중인 변경은 유지됩니다.') }}>로그인 갱신</button>
-        <button disabled={busy} onClick={() => void run(async () => { if ((dirty || authoringDirty || hubDirty) && !window.confirm('저장 전 변경을 버리고 로그아웃할까요?')) return; await api('logout', 'POST'); csrf.current = null; setWorkspace({ revision: 0, data: null }); setDirty(false); setSnapshots([]); setSelectedPreparation(null); setAuthoringDirty(false); setHubDirty(false); setPreparations(null); setActivityTarget(null); setKeywordVisited(false); setPage('dashboard'); setPhase('login'); setMessage('로그아웃했습니다.') })}>로그아웃</button>
+        <button disabled={busy || authoringDirty || hubDirty || operationsDirty} onClick={() => { setPassword(''); setPhase('login'); setMessage('서비스 비밀번호로 다시 로그인하세요. 작성 중인 변경은 유지됩니다.') }}>로그인 갱신</button>
+        <button disabled={busy} onClick={() => void run(async () => { if ((dirty || authoringDirty || hubDirty || operationsDirty) && !window.confirm('저장 전 변경을 버리고 로그아웃할까요?')) return; await api('logout', 'POST'); csrf.current = null; setWorkspace({ revision: 0, data: null }); setDirty(false); setSnapshots([]); setSelectedPreparation(null); setAuthoringDirty(false); setHubDirty(false);setOperationsDirty(false); setPreparations(null); setActivityTarget(null); setKeywordVisited(false); setPage('dashboard'); setPhase('login'); setMessage('로그아웃했습니다.') })}>로그아웃</button>
       </div><p>다른 PC에서는 서버에 저장한 버전을 불러옵니다. 브라우저 로컬 데이터는 자동으로 가져오거나 지우지 않습니다.</p></section>
       <CentralHub view={page} api={api} navigate={navigate} onDirty={setHubDirty} selectedStage={selectedStage} onStage={setSelectedStage} onProgress={setGuideRecords} />
       <div className="central-shell approved-operations">
@@ -223,6 +225,7 @@ export default function CentralApp() {
       </section>
       </div>
       </div>
+      <CentralOperations view={page} api={api} onDirtyChange={setOperationsDirty}/>
     </>}
     <footer>ZERO BUSINESS · Grow with ZERO <span>본인용 비공개 · 서버 저장</span></footer></main>
     </div>
