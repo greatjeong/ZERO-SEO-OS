@@ -38,6 +38,20 @@ class WorkbenchTests(unittest.TestCase):
             return self.author.research(doc['id'],{'revision':doc['revision'],'sourceIds':[doc['sourceOptions'][0]['id']]})
     def edit(self,doc,body='수정 본문'):
         return self.author.edit(doc['id'],{'revision':doc['revision'],'title':'새 원본 제목','body':body,'outline':['새 목차']})
+    def test_real_wp_transport_mock_pipeline_preserves_id_after_failed_readback(self):
+        from central_article_transport import WordPressArticleTransport
+        from unittest.mock import Mock
+        d=self.edit(self.article(),'## 원본 답변\n\n새 문단')
+        d=self.author.review(d['id'],{'revision':d['revision'],'checks':{k:True for k in ('facts','sources','originality','structure')},'note':'모의 수동 검토'})
+        vault=Mock();vault.load.return_value=({'url':d['siteUrl'],'username':'owner','password':'fixture'},'g')
+        drafts=ArticleDrafts(self.store,self.author,WordPressArticleTransport(vault,'A-1'))
+        with patch('central_article_transport.request_identity',return_value={'capabilities':{'edit_posts':True}}), patch('central_article_transport.request_wp',side_effect=[{'id':92,'status':'draft'},TimeoutError(),{'id':92,'status':'draft'}]) as request:
+            with self.assertRaises(HTTPException):drafts.submit(d['id'],d['revision'])
+            prior=drafts.submit(d['id'],d['revision'])
+            self.assertEqual(prior['state'],'unknown');self.assertEqual(prior['postId'],92)
+            self.assertEqual(drafts.check(prior['id'])['state'],'draft_confirmed')
+            self.assertEqual([call.args[3] for call in request.call_args_list],['POST','GET','GET'])
+
     def test_version_compare_restore_preserves_history_and_cas(self):
         a=self.article();b=self.edit(a,'첫 저장 본문');c=self.edit(b,'두 번째 본문')
         compared=self.author.compare(c['id'],b['revision']);self.assertIn('첫 저장 본문',compared['diff']);self.assertEqual(self.author.read(c['id'])['revision'],c['revision'])
@@ -145,7 +159,7 @@ class WorkbenchTests(unittest.TestCase):
     def test_all_new_endpoints_owner_and_csrf_protected(self):
         origin='https://example.com';cfg=Settings(origin,Path(self.tmp.name)/'security',hash_password('test-owner-password-123'))
         routes=[('/api/workbench/config','PUT'),('/api/workbench/rehearse','POST'),('/api/workbench/jobs','POST'),('/api/workbench/jobs/x/action','POST'),('/api/workbench/jobs/x/rehearse','POST'),('/api/workbench/network','POST'),('/api/workbench/network/x','PUT'),('/api/workbench/archive/preview','POST'),('/api/workbench/archive/restore','POST'),('/api/authoring/x/restore','POST')]
-        gets=['/api/workbench','/api/workbench/archive','/api/authoring/x/export','/api/authoring/x/compare/1','/api/authoring/x/quality']
+        gets=['/api/authoring/x/wordpress-preview','/api/workbench','/api/workbench/archive','/api/authoring/x/export','/api/authoring/x/compare/1','/api/authoring/x/quality']
         with TestClient(create_app(cfg),base_url=origin) as c:
             for path in gets:self.assertEqual(c.get(path).status_code,401,path)
             for path,method in routes:self.assertEqual(c.request(method,path,json={}).status_code,401,path)

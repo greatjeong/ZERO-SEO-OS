@@ -248,6 +248,12 @@ def create_app(settings=None):
         session(request)
         return authoring.compare(key,revision)
 
+    @app.get('/api/authoring/{key}/wordpress-preview')
+    def preview_wordpress_article(key: str,request: Request):
+        session(request)
+        from central_article_html import preview
+        return preview(authoring.read(key))
+
     @app.get('/api/authoring/{key}/quality')
     def quality_article(key: str,request: Request):
         session(request)

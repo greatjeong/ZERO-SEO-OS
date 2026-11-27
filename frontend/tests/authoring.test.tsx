@@ -46,3 +46,15 @@ test('version compare never overwrites editor and restore failure retains saved 
  expect((screen.getByLabelText('원본 글 본문') as HTMLTextAreaElement).value).toBe('현재 본문')
  expect(api).toHaveBeenLastCalledWith('authoring/p/restore','POST',{revision:3,sourceRevision:2});vi.restoreAllMocks()
 })
+
+test('WP preview keeps unsaved editor safe and never calls a publish endpoint',async()=>{
+ const api=vi.fn().mockResolvedValueOnce(doc).mockResolvedValueOnce({revision:doc.revision,title:doc.draft.title,siteUrl:prep.siteUrl,contentHtml:'<h2>안전 본문</h2>',note:'변환 미리보기'})
+ render(<CentralAuthoring preparation={prep} api={api} onDirtyChange={vi.fn()}/>);
+ await screen.findByText('원본 글 작업 공간을 불러왔습니다. 참고 글부터 확인하세요.')
+ fireEvent.click(screen.getByRole('button',{name:'워드프레스 초안 미리보기'}));await screen.findByText('변환 미리보기')
+ expect(screen.getByTitle('워드프레스 초안 본문 미리보기').getAttribute('sandbox')).toBe('')
+ expect(api.mock.calls.map(c=>c[0])).toEqual(['authoring/p/open','authoring/p/wordpress-preview'])
+ fireEvent.change(screen.getByLabelText('원본 글 본문'),{target:{value:'미저장 편집'}})
+ expect((screen.getByRole('button',{name:'워드프레스용 본문 HTML 내보내기'}) as HTMLButtonElement).disabled).toBe(true)
+ expect((screen.getByLabelText('원본 글 본문') as HTMLTextAreaElement).value).toBe('미저장 편집')
+})
